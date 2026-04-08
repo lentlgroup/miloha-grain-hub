@@ -1,0 +1,64 @@
+.manage-permissions {
+    padding: 20px;
+    font-family: Arial, sans-serif;
+}
+
+.manage-permissions h1 {
+    font-size: 24px;
+    margin-bottom: 20px;
+}
+
+.permissions-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+}
+
+.permissions-table th, .permissions-table td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+.permissions-table th {
+    background-color: #f4f4f4;
+    font-weight: bold;
+}
+
+.permissions-table tr:nth-child(even) {
+    background-color: #f9f9f9;
+}
+
+.permissions-table tr:hover {
+    background-color: #f1f1f1;
+}
+
+.edit-btn {
+    background-color: #4CAF50;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+    margin-right: 5px;
+}
+
+.edit-btn:hover {
+    background-color: #45a049;
+}
+
+.delete-btn {
+    background-color: #f44336;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+.delete-btn:hover {
+    background-color: #e53935;
+}
+
+.error {
+    color: red;
+    font-weight: bold;
+}
