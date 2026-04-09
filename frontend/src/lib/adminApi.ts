@@ -180,6 +180,9 @@ export type AdminPermission = {
 export const adminLogin = (email: string, password: string) =>
   post<AdminLoginResponse>("/login", { email, password });
 
+export const adminRegister = (name: string, email: string, password: string, password_confirmation: string) =>
+  post<AdminLoginResponse>("/register", { name, email, password, password_confirmation });
+
 export const adminLogout = () => post<{ message: string }>("/logout");
 
 export const adminMe = () => get<AdminUserPayload>("/me");

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
-import { adminLogin as apiLogin, adminLogout as apiLogout, adminMe } from "@/lib/adminApi";
+import { adminLogin as apiLogin, adminLogout as apiLogout, adminMe, adminRegister as apiRegister } from "@/lib/adminApi";
 
 export type AdminRole = "super-admin" | "content-manager" | "sales-manager" | "viewer";
 
@@ -16,6 +16,7 @@ type AuthContextType = {
   isAuthenticated: boolean;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  register: (name: string, email: string, password: string, passwordConfirmation: string) => Promise<void>;
   logout: () => void;
   hasRole: (role: AdminRole | AdminRole[]) => boolean;
   hasPermission: (permission: string | string[]) => boolean;
@@ -158,6 +159,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setUser(u);
   }, []);
 
+  const register = useCallback(async (name: string, email: string, password: string, passwordConfirmation: string) => {
+    const res = await apiRegister(name, email, password, passwordConfirmation);
+    const u: AdminUser = {
+      id: res.user.id,
+      name: res.user.name,
+      email: res.user.email,
+      roles: res.user.roles as AdminRole[],
+      permissions: res.user.permissions,
+    };
+    sessionStorage.setItem(TOKEN_KEY, res.token);
+    sessionStorage.setItem(USER_KEY, JSON.stringify(u));
+    setUser(u);
+  }, []);
+
   const logout = useCallback(async () => {
     const token = sessionStorage.getItem(TOKEN_KEY);
     if (token) {
@@ -198,6 +213,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         isAuthenticated: !!user,
         isLoading,
         login,
+        register,
         logout,
         hasRole,
         hasPermission,
