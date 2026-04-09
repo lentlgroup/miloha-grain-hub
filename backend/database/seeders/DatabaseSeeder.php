@@ -246,6 +246,19 @@ class DatabaseSeeder extends Seeder
                         ],
                     ],
                 ],
+                'hero_slides' => [
+                    [
+                        'title' => 'Fresh Grains, Fair Prices',
+                        'subtitle' => 'Reliable grain supply for homes, retailers, and institutions across Dar es Salaam and beyond.',
+                        'badge' => 'Quality Assured',
+                        'caption' => "Sourced from Tanzania's finest paddy fields",
+                        'cta_primary' => 'Explore Products',
+                        'cta_secondary' => 'Get a Quote',
+                        'image_key' => 'hero',
+                        'sort_order' => 1,
+                        'active' => true,
+                    ],
+                ],
             ]
         );
 

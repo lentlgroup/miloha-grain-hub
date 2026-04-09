@@ -82,7 +82,10 @@ const ManageFAQs = () => {
     sort_order: f.sort_order,
   }));
 
-  const onSuccess = () => qc.invalidateQueries({ queryKey: ["admin", "faqs"] });
+  const onSuccess = () => {
+    qc.invalidateQueries({ queryKey: ["admin", "faqs"] });
+    qc.invalidateQueries({ queryKey: ["site-content"] });
+  };
   const onError = (err: Error) =>
     toast({ title: "Error", description: err.message, variant: "destructive" });
 

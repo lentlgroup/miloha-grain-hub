@@ -79,6 +79,16 @@ export type SiteSearchResponse = {
   results: SiteSearchResult[];
 };
 
+export type HeroSlide = {
+  title: string;
+  subtitle: string;
+  badge: string;
+  caption: string;
+  cta_primary: string;
+  cta_secondary: string;
+  image_key: string;
+};
+
 export type SiteContentPayload = {
   products: ApiProduct[];
   trustMetrics: TrustMetric[];
@@ -88,6 +98,7 @@ export type SiteContentPayload = {
   buyerLogos: string[];
   faqs: Faq[];
   promoHighlights: LocalizedText[];
+  heroSlides: HeroSlide[];
 };
 
 export type SiteContent = Omit<SiteContentPayload, "products"> & {
@@ -425,6 +436,17 @@ export const fallbackSiteContent: SiteContent = {
   buyerLogos,
   faqs,
   promoHighlights,
+  heroSlides: [
+    {
+      title: "Fresh Grains, Fair Prices",
+      subtitle: "Reliable grain supply for homes, retailers, and institutions across Dar es Salaam and beyond.",
+      badge: "Quality Assured",
+      caption: "Sourced from Tanzania's finest paddy fields",
+      cta_primary: "Explore Products",
+      cta_secondary: "Get a Quote",
+      image_key: "hero",
+    },
+  ],
 };
 
 export const hydrateSiteContent = (payload: SiteContentPayload): SiteContent => ({

@@ -6,8 +6,10 @@ export const useSiteContent = () => {
   const query = useQuery<SiteContentPayload, Error, SiteContent>({
     queryKey: ["site-content"],
     queryFn: fetchSiteContent,
-    staleTime: 1000 * 60 * 5,
+    staleTime: 0,
+    gcTime: 1000 * 60 * 5,
     retry: 1,
+    refetchOnWindowFocus: true,
     select: hydrateSiteContent,
   });
 

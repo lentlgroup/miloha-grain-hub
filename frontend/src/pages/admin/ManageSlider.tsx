@@ -1,10 +1,12 @@
-import { useRef, useState } from "react";
-import { Plus, Pencil, Trash2, Image, Upload, Eye, EyeOff, GripVertical, Sparkles } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, Pencil, Trash2, Eye, EyeOff, GripVertical, Sparkles, RefreshCw, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -23,9 +25,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { fetchSiteSettings, updateSiteSettings } from "@/lib/adminApi";
 import heroImg from "@/assets/hero-grains.jpg";
+import { cn } from "@/lib/utils";
 
 type SlideItem = {
   id: number;
@@ -35,49 +40,93 @@ type SlideItem = {
   caption: string;
   cta_primary: string;
   cta_secondary: string;
-  image_preview: string;
+  image_key: string;
   sort_order: number;
   active: boolean;
 };
-
-const initialSlides: SlideItem[] = [
-  {
-    id: 1,
-    title: "Fresh Grains,\nFair Prices",
-    subtitle: "Reliable grain supply for homes, retailers, and institutions across Dar es Salaam and beyond.",
-    badge: "Quality Assured",
-    caption: "Sourced from Tanzania's finest paddy fields",
-    cta_primary: "Explore Products",
-    cta_secondary: "Get a Quote",
-    image_preview: heroImg,
-    sort_order: 1,
-    active: true,
-  },
-];
 
 const emptyForm = (): Omit<SlideItem, "id" | "sort_order"> => ({
   title: "",
   subtitle: "",
   badge: "",
   caption: "",
-  cta_primary: "",
-  cta_secondary: "",
-  image_preview: "",
+  cta_primary: "Explore Products",
+  cta_secondary: "Get a Quote",
+  image_key: "hero",
   active: true,
 });
 
+const rawToSlides = (raw: unknown[]): SlideItem[] =>
+  raw.map((r, i) => {
+    const s = r as Record<string, unknown>;
+    return {
+      id: i + 1,
+      title: String(s.title ?? ""),
+      subtitle: String(s.subtitle ?? ""),
+      badge: String(s.badge ?? ""),
+      caption: String(s.caption ?? ""),
+      cta_primary: String(s.cta_primary ?? ""),
+      cta_secondary: String(s.cta_secondary ?? ""),
+      image_key: String(s.image_key ?? "hero"),
+      sort_order: typeof s.sort_order === "number" ? s.sort_order : i + 1,
+      active: s.active !== false,
+    };
+  });
+
+const slidesToRaw = (slides: SlideItem[]) =>
+  slides.map((s) => ({
+    title: s.title,
+    subtitle: s.subtitle,
+    badge: s.badge,
+    caption: s.caption,
+    cta_primary: s.cta_primary,
+    cta_secondary: s.cta_secondary,
+    image_key: s.image_key,
+    sort_order: s.sort_order,
+    active: s.active,
+  }));
+
 const ManageSlider = () => {
   const { hasPermission } = useAuth();
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const canEdit = hasPermission("manage-slider");
 
-  const [slides, setSlides] = useState<SlideItem[]>(initialSlides);
+  const [slides, setSlides] = useState<SlideItem[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editing, setEditing] = useState<SlideItem | null>(null);
   const [form, setForm] = useState<Omit<SlideItem, "id" | "sort_order">>(emptyForm());
-  const [isSaving, setIsSaving] = useState(false);
-  const [preview, setPreview] = useState<SlideItem | null>(slides[0] ?? null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [preview, setPreview] = useState<SlideItem | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
+
+  const { data: settingsData, isLoading, refetch } = useQuery({
+    queryKey: ["admin", "site-settings"],
+    queryFn: fetchSiteSettings,
+  });
+
+  useEffect(() => {
+    const raw = settingsData?.data?.hero_slides;
+    if (Array.isArray(raw)) {
+      const loaded = rawToSlides(raw);
+      setSlides(loaded);
+      setPreview((prev) => loaded.find((s) => s.id === prev?.id) ?? loaded[0] ?? null);
+    }
+    setIsDirty(false);
+  }, [settingsData]);
+
+  const saveMutation = useMutation({
+    mutationFn: (heroSlides: ReturnType<typeof slidesToRaw>) =>
+      updateSiteSettings({ hero_slides: heroSlides }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "site-settings"] });
+      qc.invalidateQueries({ queryKey: ["site-content"] });
+      setIsDirty(false);
+      toast({ title: "Saved", description: "Hero slider updated and live on the website." });
+    },
+    onError: (err: Error) =>
+      toast({ title: "Save failed", description: err.message, variant: "destructive" }),
+  });
 
   const openCreate = () => {
     setEditing(null);
@@ -94,23 +143,13 @@ const ManageSlider = () => {
       caption: s.caption,
       cta_primary: s.cta_primary,
       cta_secondary: s.cta_secondary,
-      image_preview: s.image_preview,
+      image_key: s.image_key,
       active: s.active,
     });
     setDialogOpen(true);
   };
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const url = URL.createObjectURL(file);
-    setForm((f) => ({ ...f, image_preview: url }));
-  };
-
-  const handleSave = async () => {
-    setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 600));
-
+  const handleSave = () => {
     if (editing) {
       setSlides((prev) =>
         prev.map((s) => (s.id === editing.id ? { ...s, ...form } : s)),
@@ -118,23 +157,29 @@ const ManageSlider = () => {
     } else {
       const newId = Math.max(0, ...slides.map((s) => s.id)) + 1;
       const newSlide: SlideItem = { id: newId, ...form, sort_order: slides.length + 1 };
-      setSlides((prev) => [...prev, newSlide]);
+      setSlides((prev) => {
+        const updated = [...prev, newSlide];
+        setPreview(newSlide);
+        return updated;
+      });
     }
-
-    setIsSaving(false);
+    setIsDirty(true);
     setDialogOpen(false);
   };
 
   const handleDelete = (id: number) => {
-    setSlides((prev) =>
-      prev.filter((s) => s.id !== id).map((s, i) => ({ ...s, sort_order: i + 1 })),
-    );
-    if (preview?.id === id) setPreview(null);
+    setSlides((prev) => {
+      const updated = prev.filter((s) => s.id !== id).map((s, i) => ({ ...s, sort_order: i + 1 }));
+      if (preview?.id === id) setPreview(updated[0] ?? null);
+      return updated;
+    });
+    setIsDirty(true);
     setDeleteId(null);
   };
 
   const toggleActive = (id: number) => {
     setSlides((prev) => prev.map((s) => (s.id === id ? { ...s, active: !s.active } : s)));
+    setIsDirty(true);
   };
 
   const moveUp = (id: number) => {
@@ -145,6 +190,7 @@ const ManageSlider = () => {
       [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
       return arr.map((s, i) => ({ ...s, sort_order: i + 1 }));
     });
+    setIsDirty(true);
   };
 
   const moveDown = (id: number) => {
@@ -155,270 +201,263 @@ const ManageSlider = () => {
       [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
       return arr.map((s, i) => ({ ...s, sort_order: i + 1 }));
     });
+    setIsDirty(true);
   };
 
   const field = (key: keyof typeof form) => ({
-    value: String(form[key] ?? ""),
+    value: key === "active" ? undefined : String(form[key] ?? ""),
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [key]: e.target.value })),
   });
 
-  const isValid = form.title.trim() && form.image_preview;
+  const isValid = form.title.trim().length > 0;
+
+  const previewSlide = preview ?? slides[0] ?? null;
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Hero Slider</h1>
-          <p className="text-sm text-muted-foreground mt-1">Manage hero section images and text on the landing page</p>
+          <p className="text-sm text-muted-foreground mt-1">
+            Manage the hero section text on the landing page — changes are saved to the database and appear live.
+          </p>
         </div>
-        {canEdit && (
-          <Button onClick={openCreate} className="gap-2">
-            <Plus size={15} /> Add Slide
+        <div className="flex items-center gap-2 self-start">
+          <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => refetch()}>
+            <RefreshCw size={13} /> Refresh
           </Button>
-        )}
+          {canEdit && isDirty && (
+            <Button className="gap-2" onClick={() => saveMutation.mutate(slidesToRaw(slides))} disabled={saveMutation.isPending}>
+              <Save size={14} /> {saveMutation.isPending ? "Saving…" : "Save Changes"}
+            </Button>
+          )}
+          {canEdit && !isDirty && (
+            <Button onClick={openCreate} className="gap-2">
+              <Plus size={14} /> Add Slide
+            </Button>
+          )}
+        </div>
       </div>
 
-      {/* Preview */}
-      {preview && (
+      {isDirty && (
+        <div className="flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-700 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-400">
+          <Sparkles size={14} />
+          <span className="flex-1">You have unsaved changes. Click <strong>Save Changes</strong> to publish to the website.</span>
+          <Button size="sm" className="gap-1.5 h-7 text-xs" onClick={() => saveMutation.mutate(slidesToRaw(slides))} disabled={saveMutation.isPending}>
+            <Save size={12} /> Save
+          </Button>
+        </div>
+      )}
+
+      {/* Hero preview */}
+      {isLoading ? (
+        <Skeleton className="h-52 w-full rounded-2xl" />
+      ) : previewSlide ? (
         <Card className="overflow-hidden border-border/60">
           <div className="border-b border-border/60 px-5 py-3 flex items-center justify-between">
-            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Live Preview</p>
+            <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">Live Preview · Slide {previewSlide.sort_order}</p>
             <div className="flex gap-2">
               {slides.filter((s) => s.active).map((s) => (
                 <button
                   key={s.id}
                   onClick={() => setPreview(s)}
-                  className={`h-2 rounded-full transition-all ${preview.id === s.id ? "w-6 bg-primary" : "w-2 bg-muted-foreground/40"}`}
+                  className={cn("h-2 rounded-full transition-all", preview?.id === s.id ? "w-6 bg-primary" : "w-2 bg-muted-foreground/40")}
                 />
               ))}
             </div>
           </div>
           <div className="relative h-52 sm:h-72 bg-secondary overflow-hidden">
-            {preview.image_preview && (
-              <img src={preview.image_preview} alt="" className="absolute inset-0 h-full w-full object-cover opacity-50" />
-            )}
-            <div className="absolute inset-0 bg-gradient-to-r from-secondary/95 via-secondary/70 to-transparent" />
-            <div className="relative z-10 flex h-full flex-col justify-center px-8">
-              {preview.badge && (
-                <div className="mb-3 inline-flex w-fit items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-white/80 backdrop-blur">
+            <img src={heroImg} alt="" className="absolute inset-0 h-full w-full object-cover opacity-30" />
+            <div className="absolute inset-0 flex flex-col items-start justify-end p-6 sm:p-8">
+              {previewSlide.badge && (
+                <span className="mb-3 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-widest text-white backdrop-blur">
                   <Sparkles size={11} className="text-accent" />
-                  {preview.badge}
+                  {previewSlide.badge}
+                </span>
+              )}
+              <h2 className="text-2xl sm:text-3xl font-bold text-white leading-tight whitespace-pre-line">{previewSlide.title}</h2>
+              {previewSlide.subtitle && (
+                <p className="mt-2 max-w-lg text-sm text-white/75 leading-relaxed line-clamp-2">{previewSlide.subtitle}</p>
+              )}
+              {previewSlide.caption && (
+                <p className="mt-3 text-xs text-white/50">{previewSlide.caption}</p>
+              )}
+              {(previewSlide.cta_primary || previewSlide.cta_secondary) && (
+                <div className="mt-4 flex gap-3">
+                  {previewSlide.cta_primary && (
+                    <span className="inline-flex items-center rounded-full bg-accent px-4 py-2 text-xs font-semibold text-accent-foreground">{previewSlide.cta_primary}</span>
+                  )}
+                  {previewSlide.cta_secondary && (
+                    <span className="inline-flex items-center rounded-full border border-white/30 px-4 py-2 text-xs font-semibold text-white/80">{previewSlide.cta_secondary}</span>
+                  )}
                 </div>
               )}
-              <h2 className="text-2xl sm:text-4xl font-bold text-white leading-tight whitespace-pre-line">
-                {preview.title}
-              </h2>
-              <p className="mt-3 max-w-sm text-sm text-white/70 leading-relaxed">{preview.subtitle}</p>
-              <div className="mt-5 flex gap-3">
-                {preview.cta_primary && (
-                  <span className="rounded-full bg-secondary px-5 py-2 text-xs font-semibold text-white border border-white/20">
-                    {preview.cta_primary}
-                  </span>
-                )}
-                {preview.cta_secondary && (
-                  <span className="rounded-full border border-white/30 px-5 py-2 text-xs font-semibold text-white/80">
-                    {preview.cta_secondary}
-                  </span>
-                )}
-              </div>
             </div>
           </div>
         </Card>
-      )}
+      ) : null}
 
       {/* Slide list */}
-      <div className="space-y-3">
-        {slides.map((slide, idx) => (
-          <Card key={slide.id} className={`surface-panel border-border/60 ${!slide.active ? "opacity-60" : ""}`}>
-            <CardContent className="flex items-center gap-4 p-4">
-              {canEdit && (
-                <div className="flex flex-col gap-1 shrink-0">
-                  <button
-                    onClick={() => moveUp(slide.id)}
-                    disabled={idx === 0}
-                    className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs hover:bg-muted/50 transition-colors"
-                  >
-                    ▲
+      {isLoading ? (
+        <div className="space-y-3">
+          {[1, 2].map((i) => <Skeleton key={i} className="h-24 rounded-2xl" />)}
+        </div>
+      ) : slides.length === 0 ? (
+        <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border/60 py-16 text-center">
+          <Sparkles size={32} className="text-muted-foreground/30 mb-3" />
+          <p className="text-sm text-muted-foreground">No slides yet</p>
+          {canEdit && (
+            <Button variant="link" size="sm" className="mt-2 text-xs" onClick={openCreate}>Add your first slide</Button>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {slides.map((slide, idx) => (
+            <Card key={slide.id} className={cn("border-border/60 transition-all", !slide.active && "opacity-60")}>
+              <CardContent className="flex items-start gap-4 p-4">
+                <div className="flex flex-col gap-1 mt-1">
+                  <button onClick={() => moveUp(slide.id)} disabled={idx === 0 || !canEdit} className="disabled:opacity-30 hover:text-primary">
+                    <GripVertical size={14} className="rotate-90" />
                   </button>
-                  <GripVertical size={13} className="text-muted-foreground/40 mx-auto" />
-                  <button
-                    onClick={() => moveDown(slide.id)}
-                    disabled={idx === slides.length - 1}
-                    className="flex h-5 w-5 items-center justify-center rounded text-muted-foreground hover:text-foreground disabled:opacity-30 text-xs hover:bg-muted/50 transition-colors"
-                  >
-                    ▼
+                  <button onClick={() => moveDown(slide.id)} disabled={idx === slides.length - 1 || !canEdit} className="disabled:opacity-30 hover:text-primary">
+                    <GripVertical size={14} className="rotate-90 scale-y-[-1]" />
                   </button>
                 </div>
-              )}
 
-              {slide.image_preview ? (
-                <div
-                  className="h-14 w-20 shrink-0 cursor-pointer overflow-hidden rounded-lg border border-border/60 hover:opacity-80 transition-opacity"
+                <button
                   onClick={() => setPreview(slide)}
+                  className={cn("relative h-16 w-20 shrink-0 overflow-hidden rounded-xl border-2 transition-all", preview?.id === slide.id ? "border-primary" : "border-border/60")}
                 >
-                  <img src={slide.image_preview} alt="" className="h-full w-full object-cover" />
+                  <img src={heroImg} alt="" className="h-full w-full object-cover opacity-60" />
+                  <span className="absolute inset-0 flex items-center justify-center">
+                    <Eye size={14} className="text-white" />
+                  </span>
+                </button>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="font-semibold text-sm text-foreground truncate">{slide.title || "Untitled"}</p>
+                    {slide.badge && (
+                      <span className="inline-flex items-center rounded-full bg-accent/20 px-2 py-0.5 text-[10px] font-semibold text-accent-foreground">
+                        {slide.badge}
+                      </span>
+                    )}
+                    {!slide.active && (
+                      <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold text-muted-foreground">
+                        Hidden
+                      </span>
+                    )}
+                  </div>
+                  {slide.subtitle && (
+                    <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{slide.subtitle}</p>
+                  )}
+                  <p className="text-[11px] text-muted-foreground/60 mt-1">Slide {slide.sort_order}</p>
                 </div>
-              ) : (
-                <div className="h-14 w-20 shrink-0 flex items-center justify-center rounded-lg border border-dashed border-border/60 bg-muted/30 text-muted-foreground/40">
-                  <Image size={18} />
-                </div>
-              )}
 
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm text-foreground truncate">{slide.title.replace(/\n/g, " ")}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 truncate">{slide.subtitle}</p>
-                <p className="text-[11px] text-muted-foreground/60 mt-1">Slide {slide.sort_order}</p>
-              </div>
-
-              {canEdit && (
-                <div className="flex items-center gap-1 shrink-0">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    title={slide.active ? "Deactivate" : "Activate"}
-                    onClick={() => toggleActive(slide.id)}
-                  >
-                    {slide.active ? <Eye size={14} /> : <EyeOff size={14} />}
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                    onClick={() => openEdit(slide)}
-                  >
-                    <Pencil size={14} />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                    onClick={() => setDeleteId(slide.id)}
-                  >
-                    <Trash2 size={14} />
-                  </Button>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-
-        {slides.length === 0 && (
-          <div className="rounded-2xl border border-dashed border-border/60 py-16 text-center text-muted-foreground">
-            <Image size={28} className="mx-auto mb-3 opacity-40" />
-            <p className="text-sm font-medium">No slides yet</p>
-            {canEdit && (
-              <Button variant="link" onClick={openCreate} className="mt-2 text-xs">Add the first slide</Button>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Create / Edit dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Image size={16} className="text-primary" />
-              {editing ? "Edit Slide" : "Add Slide"}
-            </DialogTitle>
-            <DialogDescription>Configure the hero slide content and image.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-2">
-            {/* Image upload */}
-            <div className="space-y-2">
-              <Label>Hero Image <span className="text-destructive">*</span></Label>
-              <div
-                className="relative flex h-40 cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border/60 bg-muted/30 hover:border-primary/40 hover:bg-primary/5 transition-colors"
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {form.image_preview ? (
-                  <>
-                    <img src={form.image_preview} alt="" className="absolute inset-0 h-full w-full object-cover" />
-                    <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity">
-                      <Upload size={20} className="text-white" />
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-center text-muted-foreground">
-                    <Upload size={22} className="mx-auto mb-2" />
-                    <p className="text-xs font-medium">Click to upload hero image</p>
-                    <p className="text-[11px] mt-0.5">Recommended: 1920×1080px or wider</p>
+                {canEdit && (
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Switch
+                      checked={slide.active}
+                      onCheckedChange={() => toggleActive(slide.id)}
+                      className="scale-75"
+                    />
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(slide)}>
+                      <Pencil size={13} />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => setDeleteId(slide.id)}>
+                      <Trash2 size={13} />
+                    </Button>
                   </div>
                 )}
-                <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Info card */}
+      <Card className="border-border/60 bg-muted/30">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-sm">About the Hero Slider</CardTitle>
+          <CardDescription>
+            Each slide controls the text content shown in the hero section of the landing page. Changes are saved to the database and appear live after clicking <strong>Save Changes</strong>. The background image is managed separately.
+          </CardDescription>
+        </CardHeader>
+      </Card>
+
+      {/* Create / Edit dialog */}
+      <Dialog open={dialogOpen} onOpenChange={(o) => !o && setDialogOpen(false)}>
+        <DialogContent className="max-w-xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>{editing ? "Edit Slide" : "Add Slide"}</DialogTitle>
+            <DialogDescription>
+              {editing ? "Update the hero slide content." : "Add a new hero slide. Save all changes when done."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Title <span className="text-destructive">*</span></Label>
+              <Input placeholder="Fresh Grains, Fair Prices" {...field("title")} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Subtitle</Label>
+              <Textarea className="min-h-[70px] resize-none" placeholder="Supporting text below the title…" {...field("subtitle")} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Badge text</Label>
+                <Input placeholder="Quality Assured" {...field("badge")} />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Caption</Label>
+                <Input placeholder="Sourced from Tanzania's fields" {...field("caption")} />
               </div>
             </div>
-
-            <div className="space-y-2">
-              <Label>Headline / Title <span className="text-destructive">*</span></Label>
-              <Textarea placeholder={"e.g. Fresh Grains,\nFair Prices"} className="min-h-16 resize-none font-medium" {...field("title")} />
-              <p className="text-[11px] text-muted-foreground">Use a new line for a line break in the headline.</p>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Subtitle / Description</Label>
-              <Textarea placeholder="Brief supporting description…" className="min-h-16 resize-none" {...field("subtitle")} />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Badge Text</Label>
-                <Input placeholder="e.g. Quality Assured" {...field("badge")} />
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Primary CTA</Label>
+                <Input placeholder="Explore Products" {...field("cta_primary")} />
               </div>
-              <div className="space-y-2">
-                <Label>Image Caption</Label>
-                <Input placeholder="e.g. Sourced from Tanzania…" {...field("caption")} />
+              <div className="space-y-1.5">
+                <Label>Secondary CTA</Label>
+                <Input placeholder="Get a Quote" {...field("cta_secondary")} />
               </div>
             </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Primary CTA Button</Label>
-                <Input placeholder="e.g. Explore Products" {...field("cta_primary")} />
-              </div>
-              <div className="space-y-2">
-                <Label>Secondary CTA Button</Label>
-                <Input placeholder="e.g. Get a Quote" {...field("cta_secondary")} />
-              </div>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="slide-active"
+            <div className="flex items-center gap-3 rounded-xl border border-border/60 p-3">
+              <Switch
                 checked={form.active}
-                onCheckedChange={(v) => setForm((f) => ({ ...f, active: !!v }))}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, active: v }))}
               />
-              <label htmlFor="slide-active" className="text-sm cursor-pointer">Active (visible on website)</label>
+              <div>
+                <p className="text-sm font-medium">{form.active ? "Active" : "Hidden"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {form.active ? "Slide will be shown on the landing page" : "Slide is hidden from visitors"}
+                </p>
+              </div>
             </div>
           </div>
 
-          <DialogFooter>
+          <DialogFooter className="mt-2">
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSave} disabled={!isValid || isSaving}>
-              {isSaving ? "Saving…" : editing ? "Save Changes" : "Add Slide"}
+            <Button onClick={handleSave} disabled={!isValid}>
+              {editing ? "Update" : "Add Slide"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
       {/* Delete confirmation */}
-      <AlertDialog open={deleteId !== null} onOpenChange={(open) => !open && setDeleteId(null)}>
+      <AlertDialog open={!!deleteId} onOpenChange={(o) => !o && setDeleteId(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Slide</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently remove this slide from the hero section. This action cannot be undone.
-            </AlertDialogDescription>
+            <AlertDialogTitle>Delete Slide?</AlertDialogTitle>
+            <AlertDialogDescription>This will remove the slide. Click Save Changes to make it permanent.</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={() => deleteId !== null && handleDelete(deleteId)}
-            >
+            <AlertDialogAction className="bg-destructive text-destructive-foreground" onClick={() => deleteId && handleDelete(deleteId)}>
               Delete
             </AlertDialogAction>
           </AlertDialogFooter>

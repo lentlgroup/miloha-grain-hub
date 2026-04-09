@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Pencil, Trash2, FileText, Truck, BarChart3, Zap, GripVertical } from "lucide-react";
+import { Plus, Pencil, Trash2, FileText, Truck, BarChart3, Zap, GripVertical, Users, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -107,6 +107,7 @@ const ManageContent = () => {
   const [zones, setZones] = useState<DeliveryZone[]>([]);
   const [metrics, setMetrics] = useState<TrustMetric[]>([]);
   const [steps, setSteps] = useState<ProcessStep[]>([]);
+  const [buyerLogos, setBuyerLogos] = useState<string[]>([]);
 
   const settingsQuery = useQuery({
     queryKey: ["admin", "site-settings"],
@@ -170,6 +171,10 @@ const ManageContent = () => {
         })),
       );
     }
+
+    if (settings.buyer_logos) {
+      setBuyerLogos(settings.buyer_logos);
+    }
   }, [settingsQuery.data]);
 
   const buildSettings = () => ({
@@ -195,12 +200,14 @@ const ManageContent = () => {
       desc: s.desc_en,
       translations: { sw: { title: s.title_sw, desc: s.desc_sw } },
     })),
+    buyer_logos: buyerLogos,
   });
 
   const saveSettingsMutation = useMutation({
     mutationFn: (body: Parameters<typeof updateSiteSettings>[0]) => updateSiteSettings(body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["admin", "site-settings"] });
+      qc.invalidateQueries({ queryKey: ["site-content"] });
       toast({ title: "Saved", description: "Content updated successfully." });
     },
     onError: (err: Error) =>
@@ -226,6 +233,8 @@ const ManageContent = () => {
   const [stepDialog, setStepDialog] = useState(false);
   const [stepEdit, setStepEdit] = useState<ProcessStep | null>(null);
   const [stepForm, setStepForm] = useState({ title_en: "", title_sw: "", desc_en: "", desc_sw: "" });
+
+  const [logoInput, setLogoInput] = useState("");
 
   const [isSaving, setIsSaving] = useState(false);
 
@@ -326,7 +335,7 @@ const ManageContent = () => {
       )}
 
       <Tabs defaultValue="promo">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="promo" className="gap-1.5 text-xs">
             <Zap size={13} /> Promo
           </TabsTrigger>
@@ -338,6 +347,9 @@ const ManageContent = () => {
           </TabsTrigger>
           <TabsTrigger value="process" className="gap-1.5 text-xs">
             <FileText size={13} /> Process
+          </TabsTrigger>
+          <TabsTrigger value="logos" className="gap-1.5 text-xs">
+            <Users size={13} /> Logos
           </TabsTrigger>
         </TabsList>
 
@@ -478,6 +490,66 @@ const ManageContent = () => {
               </Card>
             ))}
           </div>
+        </TabsContent>
+
+        {/* Buyer Logos */}
+        <TabsContent value="logos" className="space-y-4 mt-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold">Buyer Logos</h2>
+              <p className="text-xs text-muted-foreground">Company/buyer names shown in the testimonials section trust strip</p>
+            </div>
+            <SaveButton />
+          </div>
+
+          <div className="flex gap-2">
+            <Input
+              className="flex-1"
+              placeholder="Company name (e.g. Azania Retail)"
+              value={logoInput}
+              onChange={(e) => setLogoInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && logoInput.trim()) {
+                  setBuyerLogos((prev) => [...prev, logoInput.trim()]);
+                  setLogoInput("");
+                }
+              }}
+            />
+            <Button
+              variant="outline"
+              onClick={() => {
+                if (logoInput.trim()) {
+                  setBuyerLogos((prev) => [...prev, logoInput.trim()]);
+                  setLogoInput("");
+                }
+              }}
+            >
+              <Plus size={14} /> Add
+            </Button>
+          </div>
+
+          {buyerLogos.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-border/60 py-8 text-center text-sm text-muted-foreground">
+              <Users size={20} className="mx-auto mb-2 opacity-40" />
+              No buyer logos yet. Add company names above.
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {buyerLogos.map((logo, i) => (
+                <div key={i} className="flex items-center gap-2 rounded-full border border-border/60 bg-card/80 px-4 py-2 text-sm font-medium">
+                  <span>{logo}</span>
+                  {canEdit && (
+                    <button
+                      onClick={() => setBuyerLogos((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="text-muted-foreground hover:text-destructive transition-colors"
+                    >
+                      <X size={12} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </TabsContent>
       </Tabs>
 

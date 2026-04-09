@@ -108,7 +108,10 @@ const ManageProducts = () => {
     published: true,
   }));
 
-  const onSuccess = () => qc.invalidateQueries({ queryKey: ["admin", "products"] });
+  const onSuccess = () => {
+    qc.invalidateQueries({ queryKey: ["admin", "products"] });
+    qc.invalidateQueries({ queryKey: ["site-content"] });
+  };
   const onError = (err: Error) =>
     toast({ title: "Error", description: err.message, variant: "destructive" });
 

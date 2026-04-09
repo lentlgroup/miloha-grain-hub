@@ -22,6 +22,7 @@ class SiteSettingController extends Controller
             'delivery_zones' => ['nullable', 'array'],
             'buyer_logos' => ['nullable', 'array'],
             'promo_highlights' => ['nullable', 'array'],
+            'hero_slides' => ['nullable', 'array'],
         ]);
 
         $setting = SiteSetting::query()->updateOrCreate(

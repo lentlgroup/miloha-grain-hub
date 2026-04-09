@@ -79,7 +79,10 @@ const ManageTestimonials = () => {
     sort_order: t.sort_order,
   }));
 
-  const onSuccess = () => qc.invalidateQueries({ queryKey: ["admin", "testimonials"] });
+  const onSuccess = () => {
+    qc.invalidateQueries({ queryKey: ["admin", "testimonials"] });
+    qc.invalidateQueries({ queryKey: ["site-content"] });
+  };
   const onError = (err: Error) =>
     toast({ title: "Error", description: err.message, variant: "destructive" });
 

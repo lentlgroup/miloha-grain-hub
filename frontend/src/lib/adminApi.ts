@@ -147,6 +147,7 @@ export type AdminSiteSetting = {
   delivery_zones: Record<string, unknown>[] | null;
   buyer_logos: string[] | null;
   promo_highlights: Record<string, unknown>[] | null;
+  hero_slides: Record<string, unknown>[] | null;
 };
 
 export type AdminUser = {

@@ -46,6 +46,20 @@ class SiteContentController extends Controller
                 ])
                 ->values(),
             'buyerLogos' => $homepage?->buyer_logos ?? [],
+            'heroSlides' => collect($homepage?->hero_slides ?? [])
+                ->filter(fn (array $slide) => ($slide['active'] ?? true) === true)
+                ->sortBy('sort_order')
+                ->values()
+                ->map(fn (array $slide) => [
+                    'title' => $slide['title'] ?? '',
+                    'subtitle' => $slide['subtitle'] ?? '',
+                    'badge' => $slide['badge'] ?? '',
+                    'caption' => $slide['caption'] ?? '',
+                    'cta_primary' => $slide['cta_primary'] ?? '',
+                    'cta_secondary' => $slide['cta_secondary'] ?? '',
+                    'image_key' => $slide['image_key'] ?? 'hero',
+                ])
+                ->all(),
             'promoHighlights' => collect($homepage?->promo_highlights ?? [])
                 ->map(fn (array $highlight) => $this->translatedField($highlight, 'text'))
                 ->values(),

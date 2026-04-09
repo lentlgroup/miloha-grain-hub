@@ -69,6 +69,9 @@ const HeroSection = () => {
   const { content } = useSiteContent();
   const { language, copy } = useLanguage();
 
+  // Use first active hero slide from API if available, otherwise fall through to copy
+  const heroSlide = content.heroSlides?.[0] ?? null;
+
   useEffect(() => {
     const onScroll = () => setOffsetY(Math.min(window.scrollY * 0.14, 36));
 
@@ -149,7 +152,7 @@ const HeroSection = () => {
               <div className="relative overflow-hidden rounded-[1.8rem] border border-white/10">
                 <div className="absolute left-4 top-4 z-10 inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white backdrop-blur">
                   <Sparkles size={14} className="text-accent" />
-                  {copy.hero.imageBadge}
+                  {heroSlide?.badge || copy.hero.imageBadge}
                 </div>
                 <img
                   src={heroImage}
@@ -161,8 +164,8 @@ const HeroSection = () => {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-secondary via-secondary/50 to-transparent" />
                 <div className="absolute inset-x-4 bottom-4 rounded-[1.6rem] border border-white/10 bg-black/20 p-5 backdrop-blur-md">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/70">{copy.hero.imageKicker}</p>
-                  <p className="mt-2 text-2xl font-semibold text-white">{copy.hero.imageTitle}</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-white/70">{heroSlide?.caption || copy.hero.imageKicker}</p>
+                  <p className="mt-2 text-2xl font-semibold text-white">{heroSlide?.title?.split("\n")?.[0] || copy.hero.imageTitle}</p>
                 </div>
               </div>
 

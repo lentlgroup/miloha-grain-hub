@@ -13,6 +13,7 @@ class SiteSetting extends Model
         'delivery_zones',
         'buyer_logos',
         'promo_highlights',
+        'hero_slides',
     ];
 
     protected function casts(): array
@@ -23,6 +24,7 @@ class SiteSetting extends Model
             'delivery_zones' => 'array',
             'buyer_logos' => 'array',
             'promo_highlights' => 'array',
+            'hero_slides' => 'array',
         ];
     }
 }
