@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, Shield, Search, Key, ChevronDown } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, Pencil, Trash2, Shield, Search, Key } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -26,63 +28,15 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/contexts/AuthContext";
-
-const ALL_PERMISSIONS = [
-  "manage-users",
-  "manage-roles",
-  "manage-permissions",
-  "manage-inquiries",
-  "manage-content",
-  "manage-products",
-  "manage-testimonials",
-  "manage-faqs",
-  "manage-slider",
-];
-
-type Role = {
-  id: number;
-  name: string;
-  description: string;
-  permissions: string[];
-  users_count: number;
-};
-
-const initialRoles: Role[] = [
-  {
-    id: 1,
-    name: "super-admin",
-    description: "Full access to all portal features and settings",
-    permissions: ALL_PERMISSIONS,
-    users_count: 1,
-  },
-  {
-    id: 2,
-    name: "content-manager",
-    description: "Can manage all website content: products, testimonials, FAQs, slider, and site content",
-    permissions: ["manage-content", "manage-products", "manage-testimonials", "manage-faqs", "manage-slider"],
-    users_count: 1,
-  },
-  {
-    id: 3,
-    name: "sales-manager",
-    description: "Can view and manage customer inquiries and follow-ups",
-    permissions: ["manage-inquiries"],
-    users_count: 1,
-  },
-  {
-    id: 4,
-    name: "viewer",
-    description: "Read-only access to the admin portal",
-    permissions: [],
-    users_count: 0,
-  },
-];
-
-const emptyForm = () => ({
-  name: "",
-  description: "",
-  permissions: [] as string[],
-});
+import { useToast } from "@/hooks/use-toast";
+import {
+  fetchAdminRoles,
+  fetchAdminPermissions,
+  createAdminRole,
+  updateAdminRole,
+  deleteAdminRole,
+  type AdminRole,
+} from "@/lib/adminApi";
 
 const permissionLabels: Record<string, string> = {
   "manage-users": "Manage Users",
@@ -103,24 +57,66 @@ const roleColors: Record<string, string> = {
   viewer: "bg-gray-100 text-gray-700 dark:bg-gray-800/60 dark:text-gray-400",
 };
 
+const emptyForm = () => ({
+  name: "",
+  description: "",
+  permissions: [] as string[],
+});
+
 const ManageRoles = () => {
   const { hasPermission } = useAuth();
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const canEdit = hasPermission("manage-roles");
 
-  const [roles, setRoles] = useState<Role[]>(initialRoles);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [editing, setEditing] = useState<Role | null>(null);
+  const [editing, setEditing] = useState<AdminRole | null>(null);
   const [form, setForm] = useState(emptyForm());
-  const [isSaving, setIsSaving] = useState(false);
+
+  const rolesQuery = useQuery({
+    queryKey: ["admin", "roles"],
+    queryFn: fetchAdminRoles,
+  });
+
+  const permissionsQuery = useQuery({
+    queryKey: ["admin", "permissions"],
+    queryFn: fetchAdminPermissions,
+  });
+
+  const roles = rolesQuery.data?.data ?? [];
+  const allPermissions = permissionsQuery.data?.data ?? [];
 
   const filtered = roles.filter(
     (r) =>
       !search ||
       r.name.toLowerCase().includes(search.toLowerCase()) ||
-      r.description.toLowerCase().includes(search.toLowerCase()),
+      (r.description ?? "").toLowerCase().includes(search.toLowerCase()),
   );
+
+  const onSuccess = () => qc.invalidateQueries({ queryKey: ["admin", "roles"] });
+  const onError = (err: Error) =>
+    toast({ title: "Error", description: err.message, variant: "destructive" });
+
+  const createMutation = useMutation({
+    mutationFn: (body: Parameters<typeof createAdminRole>[0]) => createAdminRole(body),
+    onSuccess,
+    onError,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: Parameters<typeof updateAdminRole>[1] }) =>
+      updateAdminRole(id, body),
+    onSuccess,
+    onError,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteAdminRole(id),
+    onSuccess,
+    onError,
+  });
 
   const openCreate = () => {
     setEditing(null);
@@ -128,36 +124,23 @@ const ManageRoles = () => {
     setDialogOpen(true);
   };
 
-  const openEdit = (r: Role) => {
+  const openEdit = (r: AdminRole) => {
     setEditing(r);
-    setForm({ name: r.name, description: r.description, permissions: r.permissions });
+    setForm({ name: r.name, description: r.description ?? "", permissions: r.permissions });
     setDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    await new Promise((res) => setTimeout(res, 600));
-
+  const handleSave = () => {
+    const body = { name: form.name, description: form.description, permissions: form.permissions };
     if (editing) {
-      setRoles((prev) =>
-        prev.map((r) =>
-          r.id === editing.id ? { ...r, name: form.name, description: form.description, permissions: form.permissions } : r,
-        ),
-      );
+      updateMutation.mutate({ id: editing.id, body }, { onSuccess: () => setDialogOpen(false) });
     } else {
-      const newId = Math.max(0, ...roles.map((r) => r.id)) + 1;
-      setRoles((prev) => [
-        ...prev,
-        { id: newId, name: form.name, description: form.description, permissions: form.permissions, users_count: 0 },
-      ]);
+      createMutation.mutate(body, { onSuccess: () => setDialogOpen(false) });
     }
-
-    setIsSaving(false);
-    setDialogOpen(false);
   };
 
   const handleDelete = (id: number) => {
-    setRoles((prev) => prev.filter((r) => r.id !== id));
+    deleteMutation.mutate(id);
     setDeleteId(null);
   };
 
@@ -170,6 +153,7 @@ const ManageRoles = () => {
     }));
   };
 
+  const isSaving = createMutation.isPending || updateMutation.isPending;
   const isValid = form.name.trim();
 
   return (
@@ -186,6 +170,10 @@ const ManageRoles = () => {
         )}
       </div>
 
+      {rolesQuery.isError && (
+        <p className="text-destructive text-sm">{(rolesQuery.error as Error)?.message}</p>
+      )}
+
       <div className="relative max-w-sm">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -197,7 +185,14 @@ const ManageRoles = () => {
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        {filtered.map((role) => (
+        {rolesQuery.isLoading ? (
+          <>
+            <Skeleton className="h-40 w-full rounded-xl" />
+            <Skeleton className="h-40 w-full rounded-xl" />
+            <Skeleton className="h-40 w-full rounded-xl" />
+            <Skeleton className="h-40 w-full rounded-xl" />
+          </>
+        ) : filtered.map((role) => (
           <Card key={role.id} className="surface-panel border-border/60">
             <CardContent className="p-5">
               <div className="flex items-start justify-between mb-3">
@@ -247,7 +242,7 @@ const ManageRoles = () => {
           </Card>
         ))}
 
-        {filtered.length === 0 && (
+        {filtered.length === 0 && !rolesQuery.isLoading && (
           <div className="col-span-2 rounded-2xl border border-dashed border-border/60 py-16 text-center text-muted-foreground">
             <Shield size={28} className="mx-auto mb-3 opacity-40" />
             <p className="text-sm font-medium">No roles found</p>
@@ -291,15 +286,21 @@ const ManageRoles = () => {
             <div className="space-y-2">
               <Label>Permissions</Label>
               <div className="space-y-2 rounded-xl border border-border/60 p-3">
-                {ALL_PERMISSIONS.map((perm) => (
-                  <div key={perm} className="flex items-center gap-2">
+                {permissionsQuery.isLoading ? (
+                  <>
+                    <Skeleton className="h-6 w-full" />
+                    <Skeleton className="h-6 w-full" />
+                    <Skeleton className="h-6 w-full" />
+                  </>
+                ) : allPermissions.map((perm) => (
+                  <div key={perm.id} className="flex items-center gap-2">
                     <Checkbox
-                      id={`perm-${perm}`}
-                      checked={form.permissions.includes(perm)}
-                      onCheckedChange={() => togglePermission(perm)}
+                      id={`perm-${perm.name}`}
+                      checked={form.permissions.includes(perm.name)}
+                      onCheckedChange={() => togglePermission(perm.name)}
                     />
-                    <label htmlFor={`perm-${perm}`} className="flex-1 text-sm cursor-pointer">
-                      {permissionLabels[perm] ?? perm}
+                    <label htmlFor={`perm-${perm.name}`} className="flex-1 text-sm cursor-pointer">
+                      {permissionLabels[perm.name] ?? perm.name}
                     </label>
                   </div>
                 ))}

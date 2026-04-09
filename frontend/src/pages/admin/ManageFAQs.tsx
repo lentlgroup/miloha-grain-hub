@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, HelpCircle, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -30,6 +32,14 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import {
+  fetchAdminFaqs,
+  createFaq,
+  updateFaq,
+  deleteFaq,
+  reorderFaqs,
+} from "@/lib/adminApi";
 
 type Faq = {
   id: number;
@@ -40,49 +50,6 @@ type Faq = {
   sort_order: number;
 };
 
-const initialFaqs: Faq[] = [
-  {
-    id: 1,
-    question_en: "Do you support both small and bulk orders?",
-    question_sw: "Je, mnahudumia oda ndogo na kubwa?",
-    answer_en:
-      "Yes. MILOHA serves household buyers, retail shelves, restaurants, institutions, and bulk wholesale customers with different packaging sizes.",
-    answer_sw:
-      "Ndiyo. MILOHA huhudumia wanunuzi wa nyumbani, rafu za rejareja, migahawa, taasisi, na wateja wa jumla kwa saizi tofauti za vifungashio.",
-    sort_order: 1,
-  },
-  {
-    id: 2,
-    question_en: "Can I request delivery outside Dar es Salaam?",
-    question_sw: "Je, naweza kuomba usafirishaji nje ya Dar es Salaam?",
-    answer_en:
-      "Yes. Regional and up-country delivery can be arranged based on quantity, destination, and dispatch planning.",
-    answer_sw:
-      "Ndiyo. Usafirishaji wa mikoani unaweza kupangwa kulingana na kiasi, eneo la kufikisha, na mpango wa usafirishaji.",
-    sort_order: 2,
-  },
-  {
-    id: 3,
-    question_en: "Are packaged products available for retail shelves?",
-    question_sw: "Je, bidhaa zilizofungashwa zinapatikana kwa rafu za rejareja?",
-    answer_en:
-      "Yes. Our branded packaged formats are designed for shelves and available in multiple sizes depending on the product line.",
-    answer_sw:
-      "Ndiyo. Bidhaa zetu zilizofungashwa kwa chapa zimeundwa kwa rafu za maduka na zinapatikana kwa saizi tofauti kulingana na mstari wa bidhaa.",
-    sort_order: 3,
-  },
-  {
-    id: 4,
-    question_en: "How do I place a custom quote request?",
-    question_sw: "Ninawezaje kuomba bei maalum?",
-    answer_en:
-      "Use the inquiry form to choose buyer type, product, packaging, and estimated quantity, or contact us directly through WhatsApp for faster coordination.",
-    answer_sw:
-      "Tumia fomu ya maombi kuchagua aina ya mnunuzi, bidhaa, kifungashio, na kiasi kinachokadiriwa, au wasiliana nasi moja kwa moja kupitia WhatsApp kwa uratibu wa haraka.",
-    sort_order: 4,
-  },
-];
-
 const emptyForm = () => ({
   question_en: "",
   question_sw: "",
@@ -92,14 +59,57 @@ const emptyForm = () => ({
 
 const ManageFAQs = () => {
   const { hasPermission } = useAuth();
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const canEdit = hasPermission("manage-faqs");
 
-  const [faqs, setFaqs] = useState<Faq[]>(initialFaqs);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editing, setEditing] = useState<Faq | null>(null);
   const [form, setForm] = useState(emptyForm());
-  const [isSaving, setIsSaving] = useState(false);
+
+  const query = useQuery({
+    queryKey: ["admin", "faqs"],
+    queryFn: fetchAdminFaqs,
+  });
+
+  const faqs: Faq[] = (query.data?.data ?? []).map((f) => ({
+    id: f.id,
+    question_en: f.question,
+    question_sw: (f.translations as Record<string, Record<string, string>> | null)?.sw?.question ?? "",
+    answer_en: f.answer,
+    answer_sw: (f.translations as Record<string, Record<string, string>> | null)?.sw?.answer ?? "",
+    sort_order: f.sort_order,
+  }));
+
+  const onSuccess = () => qc.invalidateQueries({ queryKey: ["admin", "faqs"] });
+  const onError = (err: Error) =>
+    toast({ title: "Error", description: err.message, variant: "destructive" });
+
+  const createMutation = useMutation({
+    mutationFn: (body: Parameters<typeof createFaq>[0]) => createFaq(body),
+    onSuccess,
+    onError,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: Parameters<typeof updateFaq>[1] }) =>
+      updateFaq(id, body),
+    onSuccess,
+    onError,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteFaq(id),
+    onSuccess,
+    onError,
+  });
+
+  const reorderMutation = useMutation({
+    mutationFn: (order: number[]) => reorderFaqs(order),
+    onSuccess,
+    onError,
+  });
 
   const openCreate = () => {
     setEditing(null);
@@ -118,46 +128,38 @@ const ManageFAQs = () => {
     setDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 500));
-
+  const handleSave = () => {
+    const body = {
+      question: form.question_en,
+      answer: form.answer_en,
+      translations: { sw: { question: form.question_sw, answer: form.answer_sw } },
+    };
     if (editing) {
-      setFaqs((prev) => prev.map((f) => (f.id === editing.id ? { ...f, ...form } : f)));
+      updateMutation.mutate({ id: editing.id, body }, { onSuccess: () => setDialogOpen(false) });
     } else {
-      const newId = Math.max(0, ...faqs.map((f) => f.id)) + 1;
-      setFaqs((prev) => [...prev, { id: newId, ...form, sort_order: prev.length + 1 }]);
+      createMutation.mutate(body, { onSuccess: () => setDialogOpen(false) });
     }
-
-    setIsSaving(false);
-    setDialogOpen(false);
   };
 
   const handleDelete = (id: number) => {
-    setFaqs((prev) =>
-      prev.filter((f) => f.id !== id).map((f, i) => ({ ...f, sort_order: i + 1 })),
-    );
+    deleteMutation.mutate(id);
     setDeleteId(null);
   };
 
   const moveUp = (id: number) => {
-    setFaqs((prev) => {
-      const idx = prev.findIndex((f) => f.id === id);
-      if (idx <= 0) return prev;
-      const arr = [...prev];
-      [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
-      return arr.map((f, i) => ({ ...f, sort_order: i + 1 }));
-    });
+    const idx = faqs.findIndex((f) => f.id === id);
+    if (idx <= 0) return;
+    const arr = [...faqs];
+    [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+    reorderMutation.mutate(arr.map((f) => f.id));
   };
 
   const moveDown = (id: number) => {
-    setFaqs((prev) => {
-      const idx = prev.findIndex((f) => f.id === id);
-      if (idx >= prev.length - 1) return prev;
-      const arr = [...prev];
-      [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
-      return arr.map((f, i) => ({ ...f, sort_order: i + 1 }));
-    });
+    const idx = faqs.findIndex((f) => f.id === id);
+    if (idx >= faqs.length - 1) return;
+    const arr = [...faqs];
+    [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+    reorderMutation.mutate(arr.map((f) => f.id));
   };
 
   const field = (key: keyof ReturnType<typeof emptyForm>) => ({
@@ -166,6 +168,7 @@ const ManageFAQs = () => {
       setForm((f) => ({ ...f, [key]: e.target.value })),
   });
 
+  const isSaving = createMutation.isPending || updateMutation.isPending;
   const isValid = form.question_en.trim() && form.answer_en.trim();
 
   return (
@@ -181,6 +184,10 @@ const ManageFAQs = () => {
           </Button>
         )}
       </div>
+
+      {query.isError && (
+        <p className="text-destructive text-sm">{(query.error as Error)?.message}</p>
+      )}
 
       {/* Preview accordion */}
       <Card className="surface-panel border-border/60">
@@ -205,7 +212,14 @@ const ManageFAQs = () => {
 
       {/* FAQ list */}
       <div className="space-y-3">
-        {faqs.map((faq, idx) => (
+        {query.isLoading ? (
+          <>
+            <Skeleton className="h-20 w-full rounded-xl" />
+            <Skeleton className="h-20 w-full rounded-xl" />
+            <Skeleton className="h-20 w-full rounded-xl" />
+            <Skeleton className="h-20 w-full rounded-xl" />
+          </>
+        ) : faqs.map((faq, idx) => (
           <Card key={faq.id} className="surface-panel border-border/60">
             <CardContent className="flex items-start gap-4 p-5">
               {canEdit && (
@@ -264,7 +278,7 @@ const ManageFAQs = () => {
           </Card>
         ))}
 
-        {faqs.length === 0 && (
+        {faqs.length === 0 && !query.isLoading && (
           <div className="rounded-2xl border border-dashed border-border/60 py-16 text-center text-muted-foreground">
             <HelpCircle size={28} className="mx-auto mb-3 opacity-40" />
             <p className="text-sm font-medium">No FAQs yet</p>

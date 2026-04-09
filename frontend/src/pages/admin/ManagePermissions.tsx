@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Key, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -25,28 +26,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
-
-type Permission = {
-  id: number;
-  name: string;
-  description: string;
-  roles_count: number;
-  group: string;
-};
-
-const initialPermissions: Permission[] = [
-  { id: 1, name: "manage-users", description: "Create, edit, and delete admin user accounts", roles_count: 1, group: "Access Control" },
-  { id: 2, name: "manage-roles", description: "Create, edit, and delete roles", roles_count: 1, group: "Access Control" },
-  { id: 3, name: "manage-permissions", description: "Create, edit, and delete permissions", roles_count: 1, group: "Access Control" },
-  { id: 4, name: "manage-inquiries", description: "View, update, and follow up on customer inquiries", roles_count: 2, group: "Business" },
-  { id: 5, name: "manage-content", description: "Edit site content: delivery zones, metrics, process steps, promo highlights", roles_count: 2, group: "Content" },
-  { id: 6, name: "manage-products", description: "Create, edit, and delete product listings", roles_count: 2, group: "Content" },
-  { id: 7, name: "manage-testimonials", description: "Create, edit, delete, and reorder testimonials", roles_count: 2, group: "Content" },
-  { id: 8, name: "manage-faqs", description: "Create, edit, delete, and reorder FAQ entries", roles_count: 2, group: "Content" },
-  { id: 9, name: "manage-slider", description: "Upload and manage hero section slider images and text", roles_count: 2, group: "Content" },
-];
-
-const emptyForm = () => ({ name: "", description: "", group: "" });
+import { useToast } from "@/hooks/use-toast";
+import {
+  fetchAdminPermissions,
+  createAdminPermission,
+  updateAdminPermission,
+  deleteAdminPermission,
+  type AdminPermission,
+} from "@/lib/adminApi";
 
 const groupColors: Record<string, string> = {
   "Access Control": "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-400",
@@ -54,32 +41,69 @@ const groupColors: Record<string, string> = {
   Content: "bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400",
 };
 
+const deriveGroup = (name: string): string => {
+  if (["manage-users", "manage-roles", "manage-permissions"].includes(name)) return "Access Control";
+  if (name.includes("inquiries")) return "Business";
+  return "Content";
+};
+
+const emptyForm = () => ({ name: "", description: "" });
+
 const ManagePermissions = () => {
   const { hasPermission } = useAuth();
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const canEdit = hasPermission("manage-permissions");
 
-  const [permissions, setPermissions] = useState<Permission[]>(initialPermissions);
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
-  const [editing, setEditing] = useState<Permission | null>(null);
+  const [editing, setEditing] = useState<AdminPermission | null>(null);
   const [form, setForm] = useState(emptyForm());
-  const [isSaving, setIsSaving] = useState(false);
+
+  const query = useQuery({
+    queryKey: ["admin", "permissions"],
+    queryFn: fetchAdminPermissions,
+  });
+
+  const permissions = query.data?.data ?? [];
 
   const filtered = permissions.filter(
     (p) =>
       !search ||
       p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.description.toLowerCase().includes(search.toLowerCase()) ||
-      p.group.toLowerCase().includes(search.toLowerCase()),
+      (p.description ?? "").toLowerCase().includes(search.toLowerCase()),
   );
 
-  const grouped = filtered.reduce<Record<string, Permission[]>>((acc, p) => {
-    const group = p.group || "Other";
+  const grouped = filtered.reduce<Record<string, AdminPermission[]>>((acc, p) => {
+    const group = deriveGroup(p.name);
     if (!acc[group]) acc[group] = [];
     acc[group].push(p);
     return acc;
   }, {});
+
+  const onSuccess = () => qc.invalidateQueries({ queryKey: ["admin", "permissions"] });
+  const onError = (err: Error) =>
+    toast({ title: "Error", description: err.message, variant: "destructive" });
+
+  const createMutation = useMutation({
+    mutationFn: (body: Parameters<typeof createAdminPermission>[0]) => createAdminPermission(body),
+    onSuccess,
+    onError,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: Parameters<typeof updateAdminPermission>[1] }) =>
+      updateAdminPermission(id, body),
+    onSuccess,
+    onError,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteAdminPermission(id),
+    onSuccess,
+    onError,
+  });
 
   const openCreate = () => {
     setEditing(null);
@@ -87,39 +111,27 @@ const ManagePermissions = () => {
     setDialogOpen(true);
   };
 
-  const openEdit = (p: Permission) => {
+  const openEdit = (p: AdminPermission) => {
     setEditing(p);
-    setForm({ name: p.name, description: p.description, group: p.group });
+    setForm({ name: p.name, description: p.description ?? "" });
     setDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 500));
-
+  const handleSave = () => {
+    const body = { name: form.name, description: form.description };
     if (editing) {
-      setPermissions((prev) =>
-        prev.map((p) =>
-          p.id === editing.id ? { ...p, name: form.name, description: form.description, group: form.group } : p,
-        ),
-      );
+      updateMutation.mutate({ id: editing.id, body }, { onSuccess: () => setDialogOpen(false) });
     } else {
-      const newId = Math.max(0, ...permissions.map((p) => p.id)) + 1;
-      setPermissions((prev) => [
-        ...prev,
-        { id: newId, name: form.name, description: form.description, group: form.group, roles_count: 0 },
-      ]);
+      createMutation.mutate(body, { onSuccess: () => setDialogOpen(false) });
     }
-
-    setIsSaving(false);
-    setDialogOpen(false);
   };
 
   const handleDelete = (id: number) => {
-    setPermissions((prev) => prev.filter((p) => p.id !== id));
+    deleteMutation.mutate(id);
     setDeleteId(null);
   };
 
+  const isSaving = createMutation.isPending || updateMutation.isPending;
   const isValid = form.name.trim();
 
   return (
@@ -136,6 +148,10 @@ const ManagePermissions = () => {
         )}
       </div>
 
+      {query.isError && (
+        <p className="text-destructive text-sm">{(query.error as Error)?.message}</p>
+      )}
+
       <div className="relative max-w-sm">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
         <Input
@@ -147,7 +163,14 @@ const ManagePermissions = () => {
       </div>
 
       <div className="space-y-6">
-        {Object.entries(grouped).map(([group, perms]) => (
+        {query.isLoading ? (
+          <>
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-16 w-full rounded-xl" />
+            <Skeleton className="h-16 w-full rounded-xl" />
+          </>
+        ) : Object.entries(grouped).map(([group, perms]) => (
           <div key={group}>
             <div className="mb-3 flex items-center gap-2">
               <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${groupColors[group] ?? "bg-gray-100 text-gray-700"}`}>
@@ -188,7 +211,7 @@ const ManagePermissions = () => {
           </div>
         ))}
 
-        {filtered.length === 0 && (
+        {filtered.length === 0 && !query.isLoading && (
           <div className="rounded-2xl border border-dashed border-border/60 py-16 text-center text-muted-foreground">
             <Key size={28} className="mx-auto mb-3 opacity-40" />
             <p className="text-sm font-medium">No permissions found</p>
@@ -226,14 +249,6 @@ const ManagePermissions = () => {
                 className="min-h-16 resize-none"
                 value={form.description}
                 onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Group</Label>
-              <Input
-                placeholder="e.g. Content, Business, Access Control"
-                value={form.group}
-                onChange={(e) => setForm((f) => ({ ...f, group: e.target.value }))}
               />
             </div>
           </div>

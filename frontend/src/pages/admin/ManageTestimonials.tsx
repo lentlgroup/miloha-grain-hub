@@ -1,10 +1,12 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, Star, GripVertical, Quote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -24,6 +26,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import {
+  fetchAdminTestimonials,
+  createTestimonial,
+  updateTestimonial,
+  deleteTestimonial,
+  reorderTestimonials,
+} from "@/lib/adminApi";
 
 type Testimonial = {
   id: number;
@@ -35,42 +45,6 @@ type Testimonial = {
   sort_order: number;
 };
 
-const initialTestimonials: Testimonial[] = [
-  {
-    id: 1,
-    name: "Retail Partner",
-    role_en: "Mini-market buyer",
-    role_sw: "Mnunuzi wa mini-market",
-    quote_en:
-      "The packaging quality and grain consistency have made MILOHA easier for us to stock and recommend in-store.",
-    quote_sw:
-      "Ubora wa ufungashaji na uthabiti wa nafaka umeifanya MILOHA kuwa rahisi zaidi kwetu kuiweka dukani na kuipendekeza.",
-    sort_order: 1,
-  },
-  {
-    id: 2,
-    name: "Hospitality Client",
-    role_en: "Kitchen procurement lead",
-    role_sw: "Msimamizi wa manunuzi ya jikoni",
-    quote_en:
-      "Their delivery coordination is smooth, and the maize quality has stayed dependable across repeat orders.",
-    quote_sw:
-      "Uratibu wao wa usafirishaji ni mzuri, na ubora wa mahindi umeendelea kuwa wa kuaminika katika oda za kurudia.",
-    sort_order: 2,
-  },
-  {
-    id: 3,
-    name: "Distributor",
-    role_en: "Bulk supply customer",
-    role_sw: "Mteja wa ugavi wa kiasi kikubwa",
-    quote_en:
-      "For wholesale supply, what stands out is how clearly they communicate sizes, availability, and dispatch timing.",
-    quote_sw:
-      "Kwa ugavi wa jumla, kinachoonekana zaidi ni jinsi wanavyowasilisha kwa uwazi saizi, upatikanaji, na muda wa usafirishaji.",
-    sort_order: 3,
-  },
-];
-
 const emptyForm = (): Omit<Testimonial, "id" | "sort_order"> => ({
   name: "",
   role_en: "",
@@ -81,14 +55,58 @@ const emptyForm = (): Omit<Testimonial, "id" | "sort_order"> => ({
 
 const ManageTestimonials = () => {
   const { hasPermission } = useAuth();
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const canEdit = hasPermission("manage-testimonials");
 
-  const [testimonials, setTestimonials] = useState<Testimonial[]>(initialTestimonials);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editing, setEditing] = useState<Testimonial | null>(null);
   const [form, setForm] = useState(emptyForm());
-  const [isSaving, setIsSaving] = useState(false);
+
+  const query = useQuery({
+    queryKey: ["admin", "testimonials"],
+    queryFn: fetchAdminTestimonials,
+  });
+
+  const testimonials: Testimonial[] = (query.data?.data ?? []).map((t) => ({
+    id: t.id,
+    name: t.name,
+    quote_en: t.quote,
+    quote_sw: (t.translations as Record<string, Record<string, string>> | null)?.sw?.quote ?? "",
+    role_en: t.role ?? "",
+    role_sw: (t.translations as Record<string, Record<string, string>> | null)?.sw?.role ?? "",
+    sort_order: t.sort_order,
+  }));
+
+  const onSuccess = () => qc.invalidateQueries({ queryKey: ["admin", "testimonials"] });
+  const onError = (err: Error) =>
+    toast({ title: "Error", description: err.message, variant: "destructive" });
+
+  const createMutation = useMutation({
+    mutationFn: (body: Parameters<typeof createTestimonial>[0]) => createTestimonial(body),
+    onSuccess,
+    onError,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: Parameters<typeof updateTestimonial>[1] }) =>
+      updateTestimonial(id, body),
+    onSuccess,
+    onError,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteTestimonial(id),
+    onSuccess,
+    onError,
+  });
+
+  const reorderMutation = useMutation({
+    mutationFn: (order: number[]) => reorderTestimonials(order),
+    onSuccess,
+    onError,
+  });
 
   const openCreate = () => {
     setEditing(null);
@@ -102,51 +120,39 @@ const ManageTestimonials = () => {
     setDialogOpen(true);
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 500));
-
+  const handleSave = () => {
+    const body = {
+      quote: form.quote_en,
+      name: form.name,
+      role: form.role_en,
+      translations: { sw: { quote: form.quote_sw, role: form.role_sw } },
+    };
     if (editing) {
-      setTestimonials((prev) =>
-        prev.map((t) => (t.id === editing.id ? { ...t, ...form } : t)),
-      );
+      updateMutation.mutate({ id: editing.id, body }, { onSuccess: () => setDialogOpen(false) });
     } else {
-      const newId = Math.max(0, ...testimonials.map((t) => t.id)) + 1;
-      setTestimonials((prev) => [
-        ...prev,
-        { id: newId, ...form, sort_order: prev.length + 1 },
-      ]);
+      createMutation.mutate(body, { onSuccess: () => setDialogOpen(false) });
     }
-
-    setIsSaving(false);
-    setDialogOpen(false);
   };
 
   const handleDelete = (id: number) => {
-    setTestimonials((prev) =>
-      prev.filter((t) => t.id !== id).map((t, i) => ({ ...t, sort_order: i + 1 })),
-    );
+    deleteMutation.mutate(id);
     setDeleteId(null);
   };
 
   const moveUp = (id: number) => {
-    setTestimonials((prev) => {
-      const idx = prev.findIndex((t) => t.id === id);
-      if (idx <= 0) return prev;
-      const arr = [...prev];
-      [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
-      return arr.map((t, i) => ({ ...t, sort_order: i + 1 }));
-    });
+    const idx = testimonials.findIndex((t) => t.id === id);
+    if (idx <= 0) return;
+    const arr = [...testimonials];
+    [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]];
+    reorderMutation.mutate(arr.map((t) => t.id));
   };
 
   const moveDown = (id: number) => {
-    setTestimonials((prev) => {
-      const idx = prev.findIndex((t) => t.id === id);
-      if (idx >= prev.length - 1) return prev;
-      const arr = [...prev];
-      [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
-      return arr.map((t, i) => ({ ...t, sort_order: i + 1 }));
-    });
+    const idx = testimonials.findIndex((t) => t.id === id);
+    if (idx >= testimonials.length - 1) return;
+    const arr = [...testimonials];
+    [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]];
+    reorderMutation.mutate(arr.map((t) => t.id));
   };
 
   const field = (key: keyof typeof form) => ({
@@ -155,6 +161,7 @@ const ManageTestimonials = () => {
       setForm((f) => ({ ...f, [key]: e.target.value })),
   });
 
+  const isSaving = createMutation.isPending || updateMutation.isPending;
   const isValid = form.name.trim() && form.role_en.trim() && form.quote_en.trim();
 
   return (
@@ -171,8 +178,18 @@ const ManageTestimonials = () => {
         )}
       </div>
 
+      {query.isError && (
+        <p className="text-destructive text-sm">{(query.error as Error)?.message}</p>
+      )}
+
       <div className="space-y-3">
-        {testimonials.map((t, idx) => (
+        {query.isLoading ? (
+          <>
+            <Skeleton className="h-20 w-full rounded-xl" />
+            <Skeleton className="h-20 w-full rounded-xl" />
+            <Skeleton className="h-20 w-full rounded-xl" />
+          </>
+        ) : testimonials.map((t, idx) => (
           <Card key={t.id} className="surface-panel border-border/60">
             <CardContent className="flex items-start gap-4 p-5">
               {canEdit && (
@@ -225,7 +242,7 @@ const ManageTestimonials = () => {
           </Card>
         ))}
 
-        {testimonials.length === 0 && (
+        {testimonials.length === 0 && !query.isLoading && (
           <div className="rounded-2xl border border-dashed border-border/60 py-16 text-center text-muted-foreground">
             <Star size={28} className="mx-auto mb-3 opacity-40" />
             <p className="text-sm font-medium">No testimonials yet</p>

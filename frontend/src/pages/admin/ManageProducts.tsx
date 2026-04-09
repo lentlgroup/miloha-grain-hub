@@ -1,11 +1,13 @@
 import { useRef, useState } from "react";
-import { Plus, Pencil, Trash2, Package, Upload, X, Tag, Eye } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { Plus, Pencil, Trash2, Package, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Dialog,
   DialogContent,
@@ -26,15 +28,18 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useAuth } from "@/contexts/AuthContext";
-import riceImg from "@/assets/product-rice.jpg";
-import maizeImg from "@/assets/product-maize.jpg";
-import beansImg from "@/assets/product-beans.jpg";
-import packagedImg from "@/assets/product-packaged.jpg";
+import { useToast } from "@/hooks/use-toast";
+import {
+  fetchAdminProducts,
+  createProduct,
+  updateProduct,
+  deleteProduct,
+} from "@/lib/adminApi";
 
 type Category = "retail" | "wholesale" | "packaged" | "bulk";
 
 type Product = {
-  id: string;
+  id: number;
   name_en: string;
   name_sw: string;
   desc_en: string;
@@ -56,69 +61,6 @@ const categoryOptions: { value: Category; label: string }[] = [
   { value: "bulk", label: "Bulk" },
 ];
 
-const initialProducts: Product[] = [
-  {
-    id: "rice",
-    name_en: "Premium Rice",
-    name_sw: "Mchele Bora",
-    desc_en: "Grade A polished and unpolished rice varieties sourced from Tanzania's finest paddy fields.",
-    desc_sw: "Aina za mchele wa daraja la A uliokobolewa na usiokobolewa kutoka mashamba bora ya mpunga Tanzania.",
-    tag_en: "Best Seller",
-    tag_sw: "Inayouzwa Sana",
-    categories: ["retail", "wholesale", "bulk"],
-    sizes: "1kg, 5kg, 25kg, 50kg",
-    image_key: "rice",
-    image_preview: riceImg,
-    sort_order: 1,
-    published: true,
-  },
-  {
-    id: "maize",
-    name_en: "Quality Maize",
-    name_sw: "Mahindi Bora",
-    desc_en: "Clean, dried and sorted maize kernels ideal for ugali, flour milling, and animal feed.",
-    desc_sw: "Mahindi safi, yaliyokaushwa na kuchambuliwa yanayofaa kwa ugali, kusaga unga, na chakula cha mifugo.",
-    tag_en: "Popular",
-    tag_sw: "Maarufu",
-    categories: ["retail", "wholesale", "bulk"],
-    sizes: "5kg, 25kg, 50kg",
-    image_key: "maize",
-    image_preview: maizeImg,
-    sort_order: 2,
-    published: true,
-  },
-  {
-    id: "beans",
-    name_en: "Mixed Beans",
-    name_sw: "Maharage Mchanganyiko",
-    desc_en: "Nutritious bean varieties - kidney, soy, black, and mixed - rich in protein and fiber.",
-    desc_sw: "Aina mbalimbali za maharage kama red kidney, soya, black, na mchanganyiko zenye protini na nyuzi nyingi.",
-    tag_en: "Nutritious",
-    tag_sw: "Yenye Lishe",
-    categories: ["retail", "wholesale"],
-    sizes: "1kg, 5kg, 25kg",
-    image_key: "beans",
-    image_preview: beansImg,
-    sort_order: 3,
-    published: true,
-  },
-  {
-    id: "packaged",
-    name_en: "Packaged Products",
-    name_sw: "Bidhaa Zilizofungashwa",
-    desc_en: "Branded MILOHA packaged grains ready for retail shelves, available in 1kg, 5kg, and 25kg bags.",
-    desc_sw: "Nafaka za MILOHA zilizofungashwa tayari kwa rafu za maduka, zinapatikana katika mifuko ya 1kg, 5kg, na 25kg.",
-    tag_en: "New",
-    tag_sw: "Mpya",
-    categories: ["packaged", "retail", "wholesale"],
-    sizes: "1kg, 5kg, 25kg",
-    image_key: "packaged",
-    image_preview: packagedImg,
-    sort_order: 4,
-    published: true,
-  },
-];
-
 const emptyForm = (): Omit<Product, "id" | "sort_order"> => ({
   name_en: "",
   name_sw: "",
@@ -135,15 +77,59 @@ const emptyForm = (): Omit<Product, "id" | "sort_order"> => ({
 
 const ManageProducts = () => {
   const { hasPermission } = useAuth();
+  const { toast } = useToast();
+  const qc = useQueryClient();
   const canEdit = hasPermission("manage-products");
 
-  const [products, setProducts] = useState<Product[]>(initialProducts);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [deleteId, setDeleteId] = useState<number | null>(null);
   const [editing, setEditing] = useState<Product | null>(null);
   const [form, setForm] = useState<Omit<Product, "id" | "sort_order">>(emptyForm());
-  const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const query = useQuery({
+    queryKey: ["admin", "products"],
+    queryFn: fetchAdminProducts,
+  });
+
+  const products: Product[] = (query.data?.data ?? []).map((p) => ({
+    id: p.id,
+    name_en: p.name,
+    name_sw: (p.translations as Record<string, Record<string, string>> | null)?.sw?.name ?? "",
+    desc_en: p.description,
+    desc_sw: (p.translations as Record<string, Record<string, string>> | null)?.sw?.description ?? "",
+    tag_en: p.tag ?? "",
+    tag_sw: (p.translations as Record<string, Record<string, string>> | null)?.sw?.tag ?? "",
+    categories: p.categories as Category[],
+    sizes: p.sizes.join(", "),
+    image_key: p.image_key ?? "",
+    image_preview: "",
+    sort_order: p.sort_order,
+    published: true,
+  }));
+
+  const onSuccess = () => qc.invalidateQueries({ queryKey: ["admin", "products"] });
+  const onError = (err: Error) =>
+    toast({ title: "Error", description: err.message, variant: "destructive" });
+
+  const createMutation = useMutation({
+    mutationFn: (body: Parameters<typeof createProduct>[0]) => createProduct(body),
+    onSuccess,
+    onError,
+  });
+
+  const updateMutation = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: Parameters<typeof updateProduct>[1] }) =>
+      updateProduct(id, body),
+    onSuccess,
+    onError,
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: number) => deleteProduct(id),
+    onSuccess,
+    onError,
+  });
 
   const openCreate = () => {
     setEditing(null);
@@ -176,30 +162,28 @@ const ManageProducts = () => {
     setForm((f) => ({ ...f, image_preview: url, image_key: file.name.replace(/\.[^/.]+$/, "") }));
   };
 
-  const handleSave = async () => {
-    setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 600));
-
+  const handleSave = () => {
+    const sizesArray = form.sizes.split(",").map((s) => s.trim()).filter(Boolean);
+    const body = {
+      name: form.name_en,
+      description: form.desc_en,
+      tag: form.tag_en,
+      image_key: form.image_key || undefined,
+      categories: form.categories,
+      sizes: sizesArray,
+      sort_order: editing ? editing.sort_order : products.length + 1,
+      translations: { sw: { name: form.name_sw, description: form.desc_sw, tag: form.tag_sw } },
+    };
     if (editing) {
-      setProducts((prev) => prev.map((p) => (p.id === editing.id ? { ...p, ...form } : p)));
+      updateMutation.mutate({ id: editing.id, body }, { onSuccess: () => setDialogOpen(false) });
     } else {
-      const newId = form.name_en.toLowerCase().replace(/\s+/g, "-") + "-" + Date.now();
-      setProducts((prev) => [...prev, { id: newId, ...form, sort_order: prev.length + 1 }]);
+      createMutation.mutate(body, { onSuccess: () => setDialogOpen(false) });
     }
-
-    setIsSaving(false);
-    setDialogOpen(false);
   };
 
-  const handleDelete = (id: string) => {
-    setProducts((prev) =>
-      prev.filter((p) => p.id !== id).map((p, i) => ({ ...p, sort_order: i + 1 })),
-    );
+  const handleDelete = (id: number) => {
+    deleteMutation.mutate(id);
     setDeleteId(null);
-  };
-
-  const togglePublished = (id: string) => {
-    setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, published: !p.published } : p)));
   };
 
   const toggleCategory = (cat: Category) => {
@@ -211,12 +195,13 @@ const ManageProducts = () => {
     }));
   };
 
-  const field = (key: keyof typeof form) => ({
-    value: String(form[key] ?? ""),
+  const field = (key: "name_en" | "name_sw" | "desc_en" | "desc_sw" | "tag_en" | "tag_sw" | "sizes" | "image_key") => ({
+    value: form[key],
     onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       setForm((f) => ({ ...f, [key]: e.target.value })),
   });
 
+  const isSaving = createMutation.isPending || updateMutation.isPending;
   const isValid = form.name_en.trim() && form.desc_en.trim() && form.categories.length > 0;
 
   return (
@@ -233,15 +218,29 @@ const ManageProducts = () => {
         )}
       </div>
 
+      {query.isError && (
+        <p className="text-destructive text-sm">{(query.error as Error)?.message}</p>
+      )}
+
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-2">
-        {products.map((p) => (
+        {query.isLoading ? (
+          <>
+            <Skeleton className="h-64 w-full rounded-xl" />
+            <Skeleton className="h-64 w-full rounded-xl" />
+            <Skeleton className="h-64 w-full rounded-xl" />
+            <Skeleton className="h-64 w-full rounded-xl" />
+          </>
+        ) : products.map((p) => (
           <Card key={p.id} className="surface-panel border-border/60 overflow-hidden">
             <div className="relative h-40 bg-muted">
               {p.image_preview ? (
                 <img src={p.image_preview} alt={p.name_en} className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full items-center justify-center text-muted-foreground/40">
+                <div className="flex h-full items-center justify-center text-muted-foreground/40 flex-col gap-2">
                   <Package size={40} />
+                  {p.image_key && (
+                    <span className="text-[10px] font-mono bg-muted-foreground/10 px-2 py-0.5 rounded">{p.image_key}</span>
+                  )}
                 </div>
               )}
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
@@ -256,11 +255,6 @@ const ManageProducts = () => {
                   </span>
                 )}
               </div>
-              {!p.published && (
-                <div className="absolute top-2 left-2 rounded-full bg-black/60 px-2 py-0.5 text-[10px] font-semibold text-white/80">
-                  Draft
-                </div>
-              )}
             </div>
 
             <CardContent className="p-4">
@@ -282,14 +276,6 @@ const ManageProducts = () => {
                 <div className="flex items-center gap-2">
                   <Button variant="outline" size="sm" className="flex-1 gap-1.5 text-xs" onClick={() => openEdit(p)}>
                     <Pencil size={12} /> Edit
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="flex-1 gap-1.5 text-xs"
-                    onClick={() => togglePublished(p.id)}
-                  >
-                    <Eye size={12} /> {p.published ? "Unpublish" : "Publish"}
                   </Button>
                   <Button
                     variant="ghost"

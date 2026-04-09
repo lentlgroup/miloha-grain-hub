@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Pencil, Trash2, FileText, Truck, BarChart3, Zap, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -26,39 +28,12 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { fetchSiteSettings, updateSiteSettings } from "@/lib/adminApi";
 
 type PromoItem = { id: number; text_en: string; text_sw: string; sort_order: number };
 type DeliveryZone = { id: number; zone_en: string; zone_sw: string; eta_en: string; eta_sw: string; note_en: string; note_sw: string; sort_order: number };
 type TrustMetric = { id: number; value: number; suffix: string; label_en: string; label_sw: string; detail_en: string; detail_sw: string; sort_order: number };
 type ProcessStep = { id: number; title_en: string; title_sw: string; desc_en: string; desc_sw: string; sort_order: number };
-
-const initialPromo: PromoItem[] = [
-  { id: 1, text_en: "New-season rice and maize sourcing now available for planned wholesale orders.", text_sw: "Mchele na mahindi ya msimu mpya sasa yanapatikana kwa oda za jumla zilizopangwa.", sort_order: 1 },
-  { id: 2, text_en: "Retail-ready packaged grain bundles prepared for mini-markets and neighborhood shops.", text_sw: "Vifurushi vya nafaka vilivyofungashwa tayari kwa rejareja vimeandaliwa kwa maduka madogo.", sort_order: 2 },
-  { id: 3, text_en: "Priority response for repeat customers placing weekly or monthly replenishment requests.", text_sw: "Majibu ya kipaumbele kwa wateja wa kurudia wanaoweka oda za kila wiki au kila mwezi.", sort_order: 3 },
-];
-
-const initialZones: DeliveryZone[] = [
-  { id: 1, zone_en: "Tegeta to City Center", zone_sw: "Tegeta hadi Katikati ya Jiji", eta_en: "Same day", eta_sw: "Siku hiyo hiyo", note_en: "Fast turnaround for stocked items and repeat buyers.", note_sw: "Huduma ya haraka kwa bidhaa zilizopo stoo.", sort_order: 1 },
-  { id: 2, zone_en: "Kinondoni & Ubungo", zone_sw: "Kinondoni na Ubungo", eta_en: "Within 24 hours", eta_sw: "Ndani ya saa 24", note_en: "Reliable coverage for homes, restaurants, and mini-markets.", note_sw: "Huduma thabiti kwa nyumba, migahawa, na maduka madogo.", sort_order: 2 },
-  { id: 3, zone_en: "Temeke & Kigamboni", zone_sw: "Temeke na Kigamboni", eta_en: "24–48 hours", eta_sw: "Saa 24–48", note_en: "Scheduled dispatch with quantity-based planning.", note_sw: "Usafirishaji uliopangwa kulingana na kiasi cha oda.", sort_order: 3 },
-  { id: 4, zone_en: "Up-country supply", zone_sw: "Usambazaji wa Mikoani", eta_en: "Planned dispatch", eta_sw: "Usafirishaji uliopangwa", note_en: "Bulk shipment support for institutions and wholesale partners.", note_sw: "Msaada wa shehena kubwa kwa taasisi na washirika wa jumla.", sort_order: 4 },
-];
-
-const initialMetrics: TrustMetric[] = [
-  { id: 1, value: 500, suffix: "+", label_en: "Retail & wholesale orders supported", label_sw: "Oda za rejareja na jumla zilizohudumiwa", detail_en: "Flexible order handling for homes, retailers, and institutions.", detail_sw: "Huduma rahisi kwa nyumba, wauzaji wa rejareja, na taasisi.", sort_order: 1 },
-  { id: 2, value: 98, suffix: "%", label_en: "Quality check pass confidence", label_sw: "Uhakika wa kupita ukaguzi wa ubora", detail_en: "Careful sorting, drying, and inspection before dispatch.", detail_sw: "Upangaji, ukaushaji, na ukaguzi wa makini kabla ya kusafirishwa.", sort_order: 2 },
-  { id: 3, value: 12, suffix: "", label_en: "Packaging and bulk supply formats", label_sw: "Aina za vifungashio na usambazaji wa jumla", detail_en: "Structured for shelf-ready, household, and large-volume buyers.", detail_sw: "Imeandaliwa kwa rafu za maduka, matumizi ya nyumbani.", sort_order: 3 },
-  { id: 4, value: 8, suffix: "+", label_en: "Coverage zones around Dar es Salaam", label_sw: "Maeneo ya huduma ndani na karibu na Dar es Salaam", detail_en: "Fast response for city deliveries and arranged regional dispatch.", detail_sw: "Majibu ya haraka kwa usafirishaji wa jiji na mipango ya mikoani.", sort_order: 4 },
-];
-
-const initialSteps: ProcessStep[] = [
-  { id: 1, title_en: "Farm Sourcing", title_sw: "Upatikanaji Kutoka Mashambani", desc_en: "We work with trusted farming networks and source grains aligned with our purity and consistency standards.", desc_sw: "Tunafanya kazi na mitandao ya wakulima wanaoaminika.", sort_order: 1 },
-  { id: 2, title_en: "Cleaning & Sorting", title_sw: "Usafishaji na Upangaji", desc_en: "Batches are cleaned, graded, and sorted to remove impurities and improve uniformity.", desc_sw: "Bidhaa husafishwa, hupangwa kwa viwango, na kuchambuliwa.", sort_order: 2 },
-  { id: 3, title_en: "Quality Review", title_sw: "Ukaguzi wa Ubora", desc_en: "Moisture, freshness, and visual quality are checked before stock moves into packaging.", desc_sw: "Unyevu, ubichi, na mwonekano hukaguliwa kabla ya bidhaa kuingia kwenye ufungashaji.", sort_order: 3 },
-  { id: 4, title_en: "Packaging & Storage", title_sw: "Ufungashaji na Uhifadhi", desc_en: "Products are packed for household, retail, or wholesale channels and stored for freshness.", desc_sw: "Bidhaa hufungwa kwa matumizi ya nyumbani, rejareja, au jumla.", sort_order: 4 },
-  { id: 5, title_en: "Delivery & Fulfillment", title_sw: "Usafirishaji na Utekelezaji", desc_en: "Orders are coordinated for pickup, city delivery, or arranged up-country distribution.", desc_sw: "Oda huratibiwa kwa kuchukuliwa dukani, kupelekwa ndani ya jiji.", sort_order: 5 },
-];
 
 // Generic CRUD list component
 type GenericItem = { id: number; sort_order: number; [key: string]: unknown };
@@ -125,12 +100,112 @@ function CrudList<T extends GenericItem>({
 const ManageContent = () => {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
+  const qc = useQueryClient();
   const canEdit = hasPermission("manage-content");
 
-  const [promo, setPromo] = useState<PromoItem[]>(initialPromo);
-  const [zones, setZones] = useState<DeliveryZone[]>(initialZones);
-  const [metrics, setMetrics] = useState<TrustMetric[]>(initialMetrics);
-  const [steps, setSteps] = useState<ProcessStep[]>(initialSteps);
+  const [promo, setPromo] = useState<PromoItem[]>([]);
+  const [zones, setZones] = useState<DeliveryZone[]>([]);
+  const [metrics, setMetrics] = useState<TrustMetric[]>([]);
+  const [steps, setSteps] = useState<ProcessStep[]>([]);
+
+  const settingsQuery = useQuery({
+    queryKey: ["admin", "site-settings"],
+    queryFn: fetchSiteSettings,
+  });
+
+  useEffect(() => {
+    const settings = settingsQuery.data?.data;
+    if (!settings) return;
+
+    if (settings.promo_highlights) {
+      setPromo(
+        settings.promo_highlights.map((item, i) => ({
+          id: i + 1,
+          text_en: (item as { text?: string }).text ?? "",
+          text_sw: (item as { translations?: { sw?: { text?: string } } }).translations?.sw?.text ?? "",
+          sort_order: i + 1,
+        })),
+      );
+    }
+
+    if (settings.delivery_zones) {
+      setZones(
+        settings.delivery_zones.map((item, i) => ({
+          id: i + 1,
+          zone_en: (item as { zone?: string }).zone ?? "",
+          zone_sw: (item as { translations?: { sw?: { zone?: string } } }).translations?.sw?.zone ?? "",
+          eta_en: (item as { eta?: string }).eta ?? "",
+          eta_sw: (item as { translations?: { sw?: { eta?: string } } }).translations?.sw?.eta ?? "",
+          note_en: (item as { note?: string }).note ?? "",
+          note_sw: (item as { translations?: { sw?: { note?: string } } }).translations?.sw?.note ?? "",
+          sort_order: i + 1,
+        })),
+      );
+    }
+
+    if (settings.trust_metrics) {
+      setMetrics(
+        settings.trust_metrics.map((item, i) => ({
+          id: i + 1,
+          value: (item as { value?: number }).value ?? 0,
+          suffix: (item as { suffix?: string }).suffix ?? "",
+          label_en: (item as { label?: string }).label ?? "",
+          label_sw: (item as { translations?: { sw?: { label?: string } } }).translations?.sw?.label ?? "",
+          detail_en: (item as { detail?: string }).detail ?? "",
+          detail_sw: (item as { translations?: { sw?: { detail?: string } } }).translations?.sw?.detail ?? "",
+          sort_order: i + 1,
+        })),
+      );
+    }
+
+    if (settings.process_steps) {
+      setSteps(
+        settings.process_steps.map((item, i) => ({
+          id: i + 1,
+          title_en: (item as { title?: string }).title ?? "",
+          title_sw: (item as { translations?: { sw?: { title?: string } } }).translations?.sw?.title ?? "",
+          desc_en: (item as { desc?: string }).desc ?? "",
+          desc_sw: (item as { translations?: { sw?: { desc?: string } } }).translations?.sw?.desc ?? "",
+          sort_order: i + 1,
+        })),
+      );
+    }
+  }, [settingsQuery.data]);
+
+  const buildSettings = () => ({
+    promo_highlights: promo.map((p) => ({
+      text: p.text_en,
+      translations: { sw: { text: p.text_sw } },
+    })),
+    delivery_zones: zones.map((z) => ({
+      zone: z.zone_en,
+      eta: z.eta_en,
+      note: z.note_en,
+      translations: { sw: { zone: z.zone_sw, eta: z.eta_sw, note: z.note_sw } },
+    })),
+    trust_metrics: metrics.map((m) => ({
+      value: m.value,
+      suffix: m.suffix,
+      label: m.label_en,
+      detail: m.detail_en,
+      translations: { sw: { label: m.label_sw, detail: m.detail_sw } },
+    })),
+    process_steps: steps.map((s) => ({
+      title: s.title_en,
+      desc: s.desc_en,
+      translations: { sw: { title: s.title_sw, desc: s.desc_sw } },
+    })),
+  });
+
+  const saveSettingsMutation = useMutation({
+    mutationFn: (body: Parameters<typeof updateSiteSettings>[0]) => updateSiteSettings(body),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "site-settings"] });
+      toast({ title: "Saved", description: "Content updated successfully." });
+    },
+    onError: (err: Error) =>
+      toast({ title: "Error", description: err.message, variant: "destructive" }),
+  });
 
   // Promo dialogs
   const [promoDialog, setPromoDialog] = useState(false);
@@ -156,10 +231,9 @@ const ManageContent = () => {
 
   const save = async (fn: () => void) => {
     setIsSaving(true);
-    await new Promise((r) => setTimeout(r, 500));
+    await new Promise((r) => setTimeout(r, 100));
     fn();
     setIsSaving(false);
-    toast({ title: "Saved", description: "Content updated successfully." });
   };
 
   const openPromoCreate = () => { setPromoEdit(null); setPromoForm({ text_en: "", text_sw: "" }); setPromoDialog(true); };
@@ -215,12 +289,41 @@ const ManageContent = () => {
       </div>
     ) : null;
 
+  const SaveButton = () => (
+    <Button
+      size="sm"
+      onClick={() => saveSettingsMutation.mutate(buildSettings())}
+      disabled={saveSettingsMutation.isPending}
+      className="gap-1.5"
+    >
+      {saveSettingsMutation.isPending ? "Saving…" : "Save All"}
+    </Button>
+  );
+
+  if (settingsQuery.isLoading) {
+    return (
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Site Content</h1>
+          <p className="text-sm text-muted-foreground mt-1">Manage landing page sections</p>
+        </div>
+        <Skeleton className="h-10 w-full rounded-xl" />
+        <Skeleton className="h-40 w-full rounded-xl" />
+        <Skeleton className="h-40 w-full rounded-xl" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Site Content</h1>
         <p className="text-sm text-muted-foreground mt-1">Manage landing page sections: promo highlights, delivery zones, trust metrics, and process steps</p>
       </div>
+
+      {settingsQuery.isError && (
+        <p className="text-destructive text-sm">{(settingsQuery.error as Error)?.message}</p>
+      )}
 
       <Tabs defaultValue="promo">
         <TabsList className="grid w-full grid-cols-4">
@@ -245,7 +348,10 @@ const ManageContent = () => {
               <h2 className="text-base font-semibold">Promo Highlights</h2>
               <p className="text-xs text-muted-foreground">Rotating promotional messages shown on the hero section</p>
             </div>
-            {canEdit && <Button size="sm" onClick={openPromoCreate} className="gap-1.5"><Plus size={13} /> Add</Button>}
+            <div className="flex gap-2">
+              {canEdit && <Button size="sm" onClick={openPromoCreate} className="gap-1.5"><Plus size={13} /> Add</Button>}
+              {canEdit && <SaveButton />}
+            </div>
           </div>
           <div className="space-y-2">
             {promo.map((p, idx) => (
@@ -275,7 +381,10 @@ const ManageContent = () => {
               <h2 className="text-base font-semibold">Delivery Zones</h2>
               <p className="text-xs text-muted-foreground">Coverage areas, ETAs and delivery notes</p>
             </div>
-            {canEdit && <Button size="sm" onClick={openZoneCreate} className="gap-1.5"><Plus size={13} /> Add Zone</Button>}
+            <div className="flex gap-2">
+              {canEdit && <Button size="sm" onClick={openZoneCreate} className="gap-1.5"><Plus size={13} /> Add Zone</Button>}
+              {canEdit && <SaveButton />}
+            </div>
           </div>
           <div className="space-y-3">
             {zones.map((z, idx) => (
@@ -308,7 +417,10 @@ const ManageContent = () => {
               <h2 className="text-base font-semibold">Trust Metrics</h2>
               <p className="text-xs text-muted-foreground">Key numbers shown in the trust/stats section</p>
             </div>
-            {canEdit && <Button size="sm" onClick={openMetricCreate} className="gap-1.5"><Plus size={13} /> Add Metric</Button>}
+            <div className="flex gap-2">
+              {canEdit && <Button size="sm" onClick={openMetricCreate} className="gap-1.5"><Plus size={13} /> Add Metric</Button>}
+              {canEdit && <SaveButton />}
+            </div>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             {metrics.map((m, idx) => (
@@ -339,6 +451,7 @@ const ManageContent = () => {
               <h2 className="text-base font-semibold">Process Steps</h2>
               <p className="text-xs text-muted-foreground">Our grain handling process shown on the website</p>
             </div>
+            {canEdit && <SaveButton />}
           </div>
           <div className="space-y-3">
             {steps.map((step, idx) => (

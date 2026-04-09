@@ -1,4 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
+import { adminLogin as apiLogin, adminLogout as apiLogout, adminMe } from "@/lib/adminApi";
 
 export type AdminRole = "super-admin" | "content-manager" | "sales-manager" | "viewer";
 
@@ -22,78 +23,152 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
-const STORAGE_KEY = "admin_user";
+const USER_KEY = "admin_user";
+const TOKEN_KEY = "admin_token";
+
+// Demo accounts used when the backend is unreachable (local dev / demo mode)
+const DEMO_ACCOUNTS: Record<string, AdminUser & { password: string }> = {
+  "admin@miloha.co.tz": {
+    id: 1,
+    name: "Super Admin",
+    email: "admin@miloha.co.tz",
+    password: "demo1234",
+    roles: ["super-admin"],
+    permissions: [
+      "manage-users",
+      "manage-roles",
+      "manage-permissions",
+      "manage-inquiries",
+      "manage-content",
+      "manage-products",
+      "manage-testimonials",
+      "manage-faqs",
+      "manage-slider",
+      "manage-site-content",
+    ],
+  },
+  "content@miloha.co.tz": {
+    id: 2,
+    name: "Content Manager",
+    email: "content@miloha.co.tz",
+    password: "demo1234",
+    roles: ["content-manager"],
+    permissions: [
+      "manage-content",
+      "manage-products",
+      "manage-testimonials",
+      "manage-faqs",
+      "manage-slider",
+      "manage-site-content",
+    ],
+  },
+  "sales@miloha.co.tz": {
+    id: 3,
+    name: "Sales Manager",
+    email: "sales@miloha.co.tz",
+    password: "demo1234",
+    roles: ["sales-manager"],
+    permissions: ["manage-inquiries"],
+  },
+};
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<AdminUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  // Restore session on mount: try /api/admin/me, fall back to cached user
   useEffect(() => {
-    const stored = sessionStorage.getItem(STORAGE_KEY);
-    if (stored) {
-      try {
-        setUser(JSON.parse(stored) as AdminUser);
-      } catch {
-        sessionStorage.removeItem(STORAGE_KEY);
+    const restore = async () => {
+      const token = sessionStorage.getItem(TOKEN_KEY);
+      const cached = sessionStorage.getItem(USER_KEY);
+
+      if (token) {
+        try {
+          const me = await adminMe();
+          const restored: AdminUser = {
+            id: me.id,
+            name: me.name,
+            email: me.email,
+            roles: me.roles as AdminRole[],
+            permissions: me.permissions,
+          };
+          setUser(restored);
+          sessionStorage.setItem(USER_KEY, JSON.stringify(restored));
+        } catch {
+          // Token invalid / backend down — try cached user
+          if (cached) {
+            try {
+              setUser(JSON.parse(cached) as AdminUser);
+            } catch {
+              sessionStorage.removeItem(USER_KEY);
+              sessionStorage.removeItem(TOKEN_KEY);
+            }
+          } else {
+            sessionStorage.removeItem(TOKEN_KEY);
+          }
+        }
+      } else if (cached) {
+        try {
+          setUser(JSON.parse(cached) as AdminUser);
+        } catch {
+          sessionStorage.removeItem(USER_KEY);
+        }
       }
-    }
-    setIsLoading(false);
+
+      setIsLoading(false);
+    };
+
+    restore();
   }, []);
 
   const login = useCallback(async (email: string, password: string) => {
-    // In production this calls /api/admin/login; for now we use demo credentials
-    const demoAccounts: Record<string, AdminUser> = {
-      "admin@miloha.co.tz": {
-        id: 1,
-        name: "Super Admin",
-        email: "admin@miloha.co.tz",
-        roles: ["super-admin"],
-        permissions: [
-          "manage-users",
-          "manage-roles",
-          "manage-permissions",
-          "manage-inquiries",
-          "manage-content",
-          "manage-products",
-          "manage-testimonials",
-          "manage-faqs",
-          "manage-slider",
-        ],
-      },
-      "content@miloha.co.tz": {
-        id: 2,
-        name: "Content Manager",
-        email: "content@miloha.co.tz",
-        roles: ["content-manager"],
-        permissions: [
-          "manage-content",
-          "manage-products",
-          "manage-testimonials",
-          "manage-faqs",
-          "manage-slider",
-        ],
-      },
-      "sales@miloha.co.tz": {
-        id: 3,
-        name: "Sales Manager",
-        email: "sales@miloha.co.tz",
-        roles: ["sales-manager"],
-        permissions: ["manage-inquiries"],
-      },
-    };
+    // 1. Try real backend first
+    try {
+      const res = await apiLogin(email, password);
+      const u: AdminUser = {
+        id: res.user.id,
+        name: res.user.name,
+        email: res.user.email,
+        roles: res.user.roles as AdminRole[],
+        permissions: res.user.permissions,
+      };
+      sessionStorage.setItem(TOKEN_KEY, res.token);
+      sessionStorage.setItem(USER_KEY, JSON.stringify(u));
+      setUser(u);
+      return;
+    } catch (err) {
+      // If backend explicitly rejected credentials, re-throw (not a network error)
+      if (err instanceof Error && err.message.toLowerCase().includes("credentials")) {
+        throw new Error("Invalid email or password.");
+      }
+      // Otherwise fall through to demo mode
+    }
 
-    const found = demoAccounts[email.toLowerCase()];
-    if (!found || password !== "demo1234") {
+    // 2. Demo mode fallback (backend unreachable)
+    const demo = DEMO_ACCOUNTS[email.toLowerCase()];
+    if (!demo || password !== demo.password) {
       throw new Error("Invalid email or password.");
     }
 
-    setUser(found);
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(found));
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { password: _pw, ...u } = demo;
+    sessionStorage.setItem(USER_KEY, JSON.stringify(u));
+    sessionStorage.removeItem(TOKEN_KEY); // no real token in demo mode
+    setUser(u);
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
+    const token = sessionStorage.getItem(TOKEN_KEY);
+    if (token) {
+      try {
+        await apiLogout();
+      } catch {
+        // best-effort
+      }
+    }
+    sessionStorage.removeItem(USER_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
     setUser(null);
-    sessionStorage.removeItem(STORAGE_KEY);
   }, []);
 
   const hasRole = useCallback(
