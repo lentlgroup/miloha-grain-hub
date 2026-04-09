@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
-import { Menu, PhoneCall, Sparkles, Wheat, X } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Menu, PhoneCall, Sparkles, Wheat, X, LayoutDashboard } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useLanguage } from "@/hooks/useLanguage";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 import { getLocalizedText, languageOptions } from "@/lib/i18n";
 
@@ -16,6 +18,7 @@ const navLinks = [
 
 const Navbar = () => {
   const { language, setLanguage, copy } = useLanguage();
+  const { isAuthenticated } = useAuth();
   const [open, setOpen] = useState(false);
   const [activeHref, setActiveHref] = useState("#home");
   const [isScrolled, setIsScrolled] = useState(false);
@@ -124,6 +127,16 @@ const Navbar = () => {
               <Sparkles size={16} className="text-accent" />
               {copy.nav.quote}
             </a>
+            {isAuthenticated && (
+              <Link
+                to="/admin"
+                className="hidden md:inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/80 px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                title="Admin Panel"
+              >
+                <LayoutDashboard size={13} className="text-primary" />
+                Admin
+              </Link>
+            )}
           </div>
 
           <button

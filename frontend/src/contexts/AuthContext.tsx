@@ -137,11 +137,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(u);
       return;
     } catch (err) {
-      // If backend explicitly rejected credentials, re-throw (not a network error)
-      if (err instanceof Error && err.message.toLowerCase().includes("credentials")) {
+      // HTTP 401/422 = explicit credential rejection from backend → re-throw
+      const status = (err as Error & { status?: number }).status;
+      if (status === 401 || status === 422) {
         throw new Error("Invalid email or password.");
       }
-      // Otherwise fall through to demo mode
+      // Any other error (network down, 5xx, etc.) → fall through to demo mode
     }
 
     // 2. Demo mode fallback (backend unreachable)

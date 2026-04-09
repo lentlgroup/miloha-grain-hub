@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation, Link } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import {
   LayoutDashboard,
   MessageSquare,
@@ -14,7 +15,6 @@ import {
   Wheat,
   ChevronRight,
   Bell,
-  Settings,
 } from "lucide-react";
 import {
   Sidebar,
@@ -42,6 +42,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
+import { fetchInquiryStats } from "@/lib/adminApi";
 import { cn } from "@/lib/utils";
 
 const navMain = [
@@ -125,6 +126,15 @@ const AdminSidebar = () => {
   const { user, logout, hasPermission } = useAuth();
   const location = useLocation();
 
+  const { data: inquiryStats } = useQuery({
+    queryKey: ["admin", "inquiry-stats"],
+    queryFn: fetchInquiryStats,
+    refetchInterval: 60_000,
+    enabled: hasPermission("manage-inquiries"),
+  });
+
+  const newCount = inquiryStats?.new ?? 0;
+
   const isActive = (url: string) =>
     url === "/admin" ? location.pathname === "/admin" : location.pathname.startsWith(url);
 
@@ -188,7 +198,12 @@ const AdminSidebar = () => {
                     <Link to={item.url} className="gap-3">
                       <item.icon size={18} />
                       <span className="flex-1">{item.title}</span>
-                      {item.badge && (
+                      {item.url === "/admin/inquiries" && newCount > 0 && (
+                        <span className="group-data-[collapsible=icon]:hidden inline-flex min-w-[18px] h-[18px] items-center justify-center rounded-full bg-accent text-[10px] font-bold text-accent-foreground px-1">
+                          {newCount > 99 ? "99+" : newCount}
+                        </span>
+                      )}
+                      {item.url !== "/admin/inquiries" && item.badge && (
                         <span className="group-data-[collapsible=icon]:hidden inline-flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[9px] font-bold text-accent-foreground">
                           ●
                         </span>
@@ -334,9 +349,18 @@ const useBreadcrumbs = (): BreadcrumbItem[] => {
 };
 
 const AdminLayout = () => {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, hasPermission } = useAuth();
   const location = useLocation();
   const breadcrumbs = useBreadcrumbs();
+
+  const { data: inquiryStats } = useQuery({
+    queryKey: ["admin", "inquiry-stats"],
+    queryFn: fetchInquiryStats,
+    refetchInterval: 60_000,
+    enabled: isAuthenticated && hasPermission("manage-inquiries"),
+  });
+
+  const newCount = inquiryStats?.new ?? 0;
 
   if (isLoading) {
     return (
@@ -383,10 +407,14 @@ const AdminLayout = () => {
             </nav>
 
             <div className="ml-auto flex items-center gap-2">
-              <button className="relative flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent/50 transition-colors text-muted-foreground hover:text-foreground">
+              <Link to="/admin/inquiries" className="relative flex h-8 w-8 items-center justify-center rounded-lg hover:bg-accent/50 transition-colors text-muted-foreground hover:text-foreground" title="New inquiries">
                 <Bell size={16} />
-                <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-accent" />
-              </button>
+                {newCount > 0 && (
+                  <span className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-accent text-[9px] font-bold text-accent-foreground">
+                    {newCount > 9 ? "9+" : newCount}
+                  </span>
+                )}
+              </Link>
               <ThemeToggle />
               <a
                 href="/"

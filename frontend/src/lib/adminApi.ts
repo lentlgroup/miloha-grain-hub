@@ -1,6 +1,8 @@
 /**
  * Admin API client — all calls require an Authorization: Bearer token.
- * Token is stored in sessionStorage under the key defined in AuthContext.
+ * Token is stored in sessionStorage (intentionally — cleared when the tab
+ * closes to reduce the risk of token theft on shared/public computers).
+ * For persistent sessions across browser restarts, switch to localStorage.
  */
 
 const API_BASE = "/api/admin";
@@ -45,7 +47,10 @@ const req = async <T>(
       typeof (data as Record<string, unknown>).message === "string"
         ? (data as Record<string, unknown>).message as string
         : `Request failed with status ${response.status}`;
-    throw new Error(message);
+    // Attach HTTP status so callers can branch on it without string-matching
+    const err = new Error(message) as Error & { status: number };
+    err.status = response.status;
+    throw err;
   }
 
   return data as T;
