@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Plus, Pencil, Trash2, FileText, Truck, BarChart3, Zap, GripVertical, Save } from "lucide-react";
+import { Plus, Pencil, Trash2, FileText, Truck, BarChart3, Zap, GripVertical } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -147,6 +147,11 @@ const ManageContent = () => {
   const [metricEdit, setMetricEdit] = useState<TrustMetric | null>(null);
   const [metricForm, setMetricForm] = useState({ value: 0, suffix: "", label_en: "", label_sw: "", detail_en: "", detail_sw: "" });
 
+  // Process step dialogs
+  const [stepDialog, setStepDialog] = useState(false);
+  const [stepEdit, setStepEdit] = useState<ProcessStep | null>(null);
+  const [stepForm, setStepForm] = useState({ title_en: "", title_sw: "", desc_en: "", desc_sw: "" });
+
   const [isSaving, setIsSaving] = useState(false);
 
   const save = async (fn: () => void) => {
@@ -191,6 +196,14 @@ const ManageContent = () => {
       setMetrics((prev) => [...prev, { id, ...metricForm, sort_order: prev.length + 1 }]);
     }
     setMetricDialog(false);
+  });
+
+  const openStepEdit = (s: ProcessStep) => { setStepEdit(s); setStepForm({ title_en: s.title_en, title_sw: s.title_sw, desc_en: s.desc_en, desc_sw: s.desc_sw }); setStepDialog(true); };
+  const saveStep = () => save(() => {
+    if (stepEdit) {
+      setSteps((prev) => prev.map((s) => (s.id === stepEdit.id ? { ...s, ...stepForm } : s)));
+    }
+    setStepDialog(false);
   });
 
   const MoveButtons = ({ id, idx, length, onMoveUp, onMoveDown }: { id: number; idx: number; length: number; onMoveUp: (id: number) => void; onMoveDown: (id: number) => void }) =>
@@ -343,14 +356,7 @@ const ManageContent = () => {
                       variant="ghost"
                       size="icon"
                       className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
-                      onClick={() => {
-                        const updated = steps.map((s) =>
-                          s.id === step.id
-                            ? { ...s }
-                            : s,
-                        );
-                        setSteps(updated);
-                      }}
+                      onClick={() => openStepEdit(step)}
                     >
                       <Pencil size={12} />
                     </Button>
@@ -435,6 +441,30 @@ const ManageContent = () => {
             <Button variant="outline" onClick={() => setMetricDialog(false)}>Cancel</Button>
             <Button onClick={saveMetric} disabled={!metricForm.label_en.trim() || isSaving}>
               {isSaving ? "Saving…" : metricEdit ? "Save Changes" : "Add Metric"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Process Step Dialog */}
+      <Dialog open={stepDialog} onOpenChange={setStepDialog}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Process Step</DialogTitle>
+            <DialogDescription>Update the step title and description.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2"><Label>Title (EN) <span className="text-destructive">*</span></Label><Input value={stepForm.title_en} onChange={(e) => setStepForm((f) => ({ ...f, title_en: e.target.value }))} /></div>
+              <div className="space-y-2"><Label>Title (SW)</Label><Input value={stepForm.title_sw} onChange={(e) => setStepForm((f) => ({ ...f, title_sw: e.target.value }))} /></div>
+            </div>
+            <div className="space-y-2"><Label>Description (EN) <span className="text-destructive">*</span></Label><Textarea className="min-h-20 resize-none" value={stepForm.desc_en} onChange={(e) => setStepForm((f) => ({ ...f, desc_en: e.target.value }))} /></div>
+            <div className="space-y-2"><Label>Description (SW)</Label><Textarea className="min-h-20 resize-none" value={stepForm.desc_sw} onChange={(e) => setStepForm((f) => ({ ...f, desc_sw: e.target.value }))} /></div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStepDialog(false)}>Cancel</Button>
+            <Button onClick={saveStep} disabled={!stepForm.title_en.trim() || !stepForm.desc_en.trim() || isSaving}>
+              {isSaving ? "Saving…" : "Save Changes"}
             </Button>
           </DialogFooter>
         </DialogContent>
