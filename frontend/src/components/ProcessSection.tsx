@@ -47,9 +47,7 @@ const ProcessStep = ({
           <Icon size={24} />
         </div>
         {index < totalSteps - 1 && (
-          <div className="absolute left-[1.7rem] top-16 hidden h-[calc(100%+20px)] w-px md:block"
-            style={{ background: "linear-gradient(to bottom, hsl(var(--border)), transparent)" }}
-          />
+          <div className="absolute left-[1.7rem] top-16 hidden h-[calc(100%+20px)] w-px step-connector md:block" />
         )}
       </div>
       <div>

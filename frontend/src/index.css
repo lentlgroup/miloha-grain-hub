@@ -304,6 +304,10 @@
     transform: scale(1);
   }
 
+  .step-connector {
+    background: linear-gradient(to bottom, hsl(var(--border)), transparent);
+  }
+
   .search-target-active {
     animation: search-target-glow 2.2s ease;
     box-shadow:
@@ -340,6 +344,15 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+
+  /* Ensure scroll-reveal elements are always visible for users who prefer reduced motion */
+  .reveal-fade,
+  .reveal-fade-left,
+  .reveal-fade-right,
+  .reveal-scale {
+    opacity: 1 !important;
+    transform: none !important;
   }
 }
 

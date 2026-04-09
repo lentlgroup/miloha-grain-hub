@@ -18,9 +18,9 @@ const Footer = () => {
     : ["Premium rice", "Quality maize", "Mixed beans", "Packaged grains"];
 
   const socialLinks = [
-    { icon: Facebook, href: "#", label: "Facebook" },
-    { icon: Instagram, href: "#", label: "Instagram" },
-    { icon: Twitter, href: "#", label: "Twitter / X" },
+    { icon: Facebook, href: "https://facebook.com/milohapuregrains", label: "Facebook" },
+    { icon: Instagram, href: "https://instagram.com/milohapuregrains", label: "Instagram" },
+    { icon: Twitter, href: "https://twitter.com/milohapuregrains", label: "Twitter / X" },
   ];
 
   return (
