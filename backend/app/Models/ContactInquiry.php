@@ -18,5 +18,6 @@ class ContactInquiry extends Model
         'language',
         'message',
         'status',
+        'follow_up_note',
     ];
 }
