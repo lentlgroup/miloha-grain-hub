@@ -5,6 +5,30 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { cn } from "@/lib/utils";
 import { getLocalizedText, languageOptions } from "@/lib/i18n";
 
+const ScrollProgressBar = () => {
+  const [progress, setProgress] = useState(0);
+
+  useEffect(() => {
+    const onScroll = () => {
+      const scrollTop = window.scrollY;
+      const docHeight = document.documentElement.scrollHeight - document.documentElement.clientHeight;
+      setProgress(docHeight > 0 ? (scrollTop / docHeight) * 100 : 0);
+    };
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  return (
+    <div className="absolute bottom-0 left-0 right-0 h-[2px] overflow-hidden rounded-b-[1.75rem]">
+      <div
+        className="h-full bg-gradient-to-r from-primary via-accent to-primary transition-[width] duration-100"
+        style={{ width: `${progress}%` }}
+      />
+    </div>
+  );
+};
+
 const navLinks = [
   { key: "home", href: "#home" },
   { key: "about", href: "#about" },
@@ -56,12 +80,13 @@ const Navbar = () => {
     <nav className="fixed inset-x-0 top-0 z-50 px-4 pt-4">
       <div
         className={cn(
-          "container rounded-[1.75rem] border transition-all duration-300",
+          "container relative rounded-[1.75rem] border transition-all duration-300",
           isScrolled
             ? "border-border/80 bg-card/85 shadow-[0_22px_70px_-42px_rgba(20,31,27,0.65)] backdrop-blur-2xl"
             : "border-border/70 bg-background/78 backdrop-blur-xl",
         )}
       >
+        <ScrollProgressBar />
         <div className="flex min-h-[78px] items-center justify-between gap-4 px-4 md:px-6">
           <a href="#home" className="flex items-center gap-3">
             <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-secondary text-accent shadow-lg shadow-secondary/20">

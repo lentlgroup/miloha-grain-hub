@@ -1,6 +1,8 @@
 import { Compass, Eye, HeartHandshake, MapPin } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
 import { createLocalizedText, getLocalizedText } from "@/lib/i18n";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
+import { cn } from "@/lib/utils";
 
 const values = [
   {
@@ -43,12 +45,17 @@ const operatingSignals = [
 
 const AboutSection = () => {
   const { language, copy } = useLanguage();
+  const { ref: leftRef, isVisible: leftVisible } = useScrollReveal<HTMLDivElement>();
+  const { ref: rightRef, isVisible: rightVisible } = useScrollReveal<HTMLDivElement>();
 
   return (
     <section id="about" className="section-shell section-alt py-20 md:py-28">
       <div className="container mx-auto px-4">
         <div className="grid gap-10 lg:grid-cols-[0.92fr_1.08fr] lg:items-start">
-          <div>
+          <div
+            ref={leftRef}
+            className={cn("reveal-fade-left", leftVisible && "is-visible")}
+          >
             <div className="section-kicker">{copy.about.kicker}</div>
             <h2 className="mt-6 max-w-xl text-4xl font-bold text-foreground md:text-5xl">
               {copy.about.title}
@@ -69,10 +76,13 @@ const AboutSection = () => {
             </div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-3">
+          <div
+            ref={rightRef}
+            className={cn("grid gap-6 md:grid-cols-3 reveal-fade-right", rightVisible && "is-visible")}
+          >
             {values.map((value) => (
-              <div key={value.title.en} className="surface-panel rounded-[1.9rem] p-7 text-left">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary text-accent shadow-lg shadow-secondary/10">
+              <div key={value.title.en} className="surface-panel group rounded-[1.9rem] p-7 text-left transition-transform duration-300 hover:-translate-y-1">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-secondary text-accent shadow-lg shadow-secondary/10 transition-transform duration-300 group-hover:scale-110">
                   <value.icon size={24} />
                 </div>
                 <h3 className="mt-6 text-2xl font-bold text-foreground">{getLocalizedText(value.title, language)}</h3>

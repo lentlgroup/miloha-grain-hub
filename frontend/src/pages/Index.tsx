@@ -11,9 +11,11 @@ import FaqSection from "@/components/FaqSection";
 import ContactSection from "@/components/ContactSection";
 import Footer from "@/components/Footer";
 import FloatingWhatsApp from "@/components/FloatingWhatsApp";
+import ScrollToTopButton from "@/components/ScrollToTopButton";
+import MobileStickyBar from "@/components/MobileStickyBar";
 
 const Index = () => (
-  <div className="page-shell min-h-screen">
+  <div className="page-shell min-h-screen pb-16 md:pb-0">
     <Navbar />
     <main className="relative z-10">
       <HeroSection />
@@ -29,6 +31,8 @@ const Index = () => (
     </main>
     <Footer />
     <FloatingWhatsApp />
+    <ScrollToTopButton />
+    <MobileStickyBar />
   </div>
 );
 

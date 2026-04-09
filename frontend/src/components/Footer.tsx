@@ -1,4 +1,4 @@
-import { ArrowRight, Mail, MapPin, Phone, Wheat } from "lucide-react";
+import { ArrowRight, ArrowUp, Facebook, Instagram, Mail, MapPin, Phone, Twitter, Wheat } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
 
 const Footer = () => {
@@ -10,15 +10,23 @@ const Footer = () => {
     { label: copy.nav.products, href: "#products" },
     { label: copy.nav.delivery, href: "#coverage" },
     { label: copy.nav.services, href: "#services" },
+    { label: copy.nav.contact, href: "#contact" },
   ];
 
   const coreRange = language === "sw"
     ? ["Mchele bora", "Mahindi bora", "Maharage mchanganyiko", "Bidhaa zilizofungashwa"]
     : ["Premium rice", "Quality maize", "Mixed beans", "Packaged grains"];
 
+  const socialLinks = [
+    { icon: Facebook, href: "#", label: "Facebook" },
+    { icon: Instagram, href: "#", label: "Instagram" },
+    { icon: Twitter, href: "#", label: "Twitter / X" },
+  ];
+
   return (
     <footer className="section-shell bg-secondary py-14 text-secondary-foreground">
       <div className="container mx-auto px-4">
+        {/* CTA Banner */}
         <div className="mb-10 grid gap-8 rounded-[2rem] border border-white/10 bg-white/6 p-6 md:grid-cols-[1.1fr_0.9fr] md:p-8">
           <div>
             <div className="flex items-center gap-3">
@@ -50,6 +58,7 @@ const Footer = () => {
           </div>
         </div>
 
+        {/* Links Grid */}
         <div className="grid gap-10 sm:grid-cols-2 lg:grid-cols-4">
           <div>
             <h4 className="text-sm font-semibold uppercase tracking-[0.18em] text-secondary-foreground/55">{copy.footer.navigate}</h4>
@@ -93,11 +102,34 @@ const Footer = () => {
                 <span>info@milohapuregrains.co.tz</span>
               </div>
             </div>
+
+            {/* Social Links */}
+            <div className="mt-6 flex gap-3">
+              {socialLinks.map((social) => (
+                <a
+                  key={social.label}
+                  href={social.href}
+                  aria-label={social.label}
+                  className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/8 text-secondary-foreground/60 transition-colors hover:border-accent/30 hover:bg-white/15 hover:text-accent"
+                >
+                  <social.icon size={16} />
+                </a>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="mt-10 border-t border-white/10 pt-6 text-center text-sm text-secondary-foreground/40">
-          © {new Date().getFullYear()} {copy.brand.short}. {copy.footer.rights}
+        {/* Bottom bar */}
+        <div className="mt-10 flex flex-col items-center justify-between gap-4 border-t border-white/10 pt-6 text-sm text-secondary-foreground/40 sm:flex-row">
+          <p>© {new Date().getFullYear()} {copy.brand.short}. {copy.footer.rights}</p>
+          <button
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+            className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/8 px-4 py-2 text-xs font-semibold text-secondary-foreground/60 transition-colors hover:border-white/20 hover:text-white"
+          >
+            <ArrowUp size={14} />
+            {language === "sw" ? "Rudi juu" : "Back to top"}
+          </button>
         </div>
       </div>
     </footer>

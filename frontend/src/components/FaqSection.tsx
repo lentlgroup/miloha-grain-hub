@@ -4,12 +4,16 @@ import { useLanguage } from "@/hooks/useLanguage";
 import { useSiteContent } from "@/hooks/useSiteContent";
 import { getLocalizedText } from "@/lib/i18n";
 import { focusSearchTarget, SEARCH_NAVIGATION_EVENT, type SearchNavigationDetail } from "@/lib/site-search";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
+import { cn } from "@/lib/utils";
 
 const FaqSection = () => {
   const { content } = useSiteContent();
   const { language, copy } = useLanguage();
   const [openItem, setOpenItem] = useState<string>("");
   const [pendingTarget, setPendingTarget] = useState<string | null>(null);
+  const { ref: leftRef, isVisible: leftVisible } = useScrollReveal<HTMLDivElement>();
+  const { ref: rightRef, isVisible: rightVisible } = useScrollReveal<HTMLDivElement>();
 
   useEffect(() => {
     const onNavigate = (event: Event) => {
@@ -45,7 +49,10 @@ const FaqSection = () => {
     <section id="faq" className="section-shell py-20 md:py-28">
       <div className="container mx-auto px-4">
         <div className="grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-start">
-          <div>
+          <div
+            ref={leftRef}
+            className={cn("reveal-fade-left", leftVisible && "is-visible")}
+          >
             <div className="section-kicker">{copy.faq.kicker}</div>
             <h2 className="mt-6 text-4xl font-bold text-foreground md:text-5xl">
               {copy.faq.title}
@@ -61,7 +68,10 @@ const FaqSection = () => {
             </div>
           </div>
 
-          <div className="surface-panel rounded-[2rem] p-6">
+          <div
+            ref={rightRef}
+            className={cn("surface-panel rounded-[2rem] p-6 reveal-fade-right", rightVisible && "is-visible")}
+          >
             <Accordion type="single" collapsible className="w-full" value={openItem} onValueChange={setOpenItem}>
               {content.faqs.map((faq, index) => (
                 <AccordionItem id={`faq-item-${index + 1}`} key={faq.question.en} value={`item-${index}`} className="border-border/70">

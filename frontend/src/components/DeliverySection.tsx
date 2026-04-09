@@ -2,6 +2,8 @@ import { Clock3, MapPinned, Route, ShieldCheck } from "lucide-react";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useSiteContent } from "@/hooks/useSiteContent";
 import { createLocalizedText, getLocalizedText } from "@/lib/i18n";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
+import { cn } from "@/lib/utils";
 
 const planningSteps = [
   createLocalizedText(
@@ -25,12 +27,17 @@ const planningSteps = [
 const DeliverySection = () => {
   const { content } = useSiteContent();
   const { language, copy } = useLanguage();
+  const { ref: leftRef, isVisible: leftVisible } = useScrollReveal<HTMLDivElement>();
+  const { ref: rightRef, isVisible: rightVisible } = useScrollReveal<HTMLDivElement>();
 
   return (
     <section id="coverage" className="section-shell py-20 md:py-28">
       <div className="container mx-auto px-4">
         <div className="grid gap-10 lg:grid-cols-[1.05fr_0.95fr] lg:items-start">
-          <div>
+          <div
+            ref={leftRef}
+            className={cn("reveal-fade-left", leftVisible && "is-visible")}
+          >
             <div className="section-kicker">{copy.delivery.kicker}</div>
             <h2 className="mt-6 text-4xl font-bold text-foreground md:text-5xl">
               {copy.delivery.title}
@@ -83,7 +90,10 @@ const DeliverySection = () => {
             </div>
           </div>
 
-          <div className="surface-panel rounded-[2rem] p-6">
+          <div
+            ref={rightRef}
+            className={cn("surface-panel rounded-[2rem] p-6 reveal-fade-right", rightVisible && "is-visible")}
+          >
             <div className="mb-6 flex items-center gap-3">
               <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
                 <Clock3 size={22} />
