@@ -18,6 +18,9 @@ return Application::configure(basePath: dirname(__DIR__))
             'role' => EnsureUserHasRole::class,
             'permission' => EnsureUserHasPermission::class,
         ]);
+
+        // Enable CORS for all API routes (config/cors.php)
+        $middleware->prepend(\Illuminate\Http\Middleware\HandleCors::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
