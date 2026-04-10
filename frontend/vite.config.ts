@@ -10,7 +10,9 @@ export default defineConfig(({ mode }) => ({
     port: 8081,
     proxy: {
       "/api": {
-        target: "http://192.168.1.69:8888",
+        // Use VITE_BACKEND_URL env var, or fall back to standard Laravel dev server.
+        // Example: VITE_BACKEND_URL=http://localhost:8000 npm run dev
+        target: process.env.VITE_BACKEND_URL ?? "http://localhost:8000",
         changeOrigin: true,
       },
     },

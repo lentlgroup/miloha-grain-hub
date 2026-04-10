@@ -16,10 +16,20 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $permissionDefinitions = [
-            'manage-site-content' => 'Create and update homepage content blocks and FAQs.',
-            'manage-products' => 'Create and update the product catalog.',
-            'manage-inquiries' => 'Review and manage customer quote requests.',
-            'manage-users' => 'Assign roles and manage user access.',
+            // Content management
+            'manage-content'      => 'Create and update homepage content blocks (trust metrics, process steps, delivery zones, promo highlights, buyer logos).',
+            'manage-site-content' => 'Alias: create and update homepage content blocks and FAQs.',
+            'manage-products'     => 'Create, edit, and delete product catalog entries.',
+            'manage-testimonials' => 'Create, edit, and delete customer testimonials shown on the homepage.',
+            'manage-faqs'         => 'Create, edit, and delete FAQ entries shown on the homepage.',
+            'manage-slider'       => 'Create, edit, and reorder hero slider slides on the homepage.',
+            // Operations
+            'manage-inquiries'    => 'Review, update status, add notes, and delete customer quote requests.',
+            // User & access management
+            'manage-users'        => 'Create, edit, assign roles, activate/deactivate, and delete admin portal accounts.',
+            'manage-roles'        => 'Create and update roles and assign permissions to them.',
+            'manage-permissions'  => 'Create and manage individual system permissions.',
+            // Portal access
             'view-admin-dashboard' => 'Open the internal admin workspace.',
         ];
 
@@ -36,15 +46,23 @@ class DatabaseSeeder extends Seeder
                 'permissions' => array_keys($permissionDefinitions),
             ],
             'content-manager' => [
-                'description' => 'Manages homepage content and product information.',
-                'permissions' => ['manage-site-content', 'manage-products', 'view-admin-dashboard'],
+                'description' => 'Manages homepage content, product catalog, testimonials, FAQs, hero slider, and site settings.',
+                'permissions' => [
+                    'manage-content',
+                    'manage-site-content',
+                    'manage-products',
+                    'manage-testimonials',
+                    'manage-faqs',
+                    'manage-slider',
+                    'view-admin-dashboard',
+                ],
             ],
             'sales-manager' => [
                 'description' => 'Handles customer inquiries and sales follow-up.',
                 'permissions' => ['manage-inquiries', 'view-admin-dashboard'],
             ],
             'viewer' => [
-                'description' => 'Read-only internal access placeholder for future dashboards.',
+                'description' => 'Read-only internal access — can view the dashboard but cannot modify any data.',
                 'permissions' => ['view-admin-dashboard'],
             ],
         ];
