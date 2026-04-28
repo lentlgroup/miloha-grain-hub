@@ -6,7 +6,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { LanguageProvider } from "@/contexts/LanguageProvider";
 import { AuthProvider } from "@/contexts/AuthContext";
-import Index from "./pages/Index.tsx";
+import LentlLanding from "./pages/LentlLanding.tsx";
+import MilohaIndex from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
 import AdminLogin from "./pages/AdminLogin.tsx";
 import AdminLayout from "./components/admin/AdminLayout.tsx";
@@ -33,8 +34,11 @@ const App = () => (
             <Sonner />
             <BrowserRouter>
               <Routes>
-                {/* Public landing page */}
-                <Route path="/" element={<Index />} />
+                {/* LeNTL Group corporate landing page (root) */}
+                <Route path="/" element={<LentlLanding />} />
+
+                {/* MILOHA Pure Grains operational page */}
+                <Route path="/miloha" element={<MilohaIndex />} />
 
                 {/* Admin login */}
                 <Route path="/admin/login" element={<AdminLogin />} />

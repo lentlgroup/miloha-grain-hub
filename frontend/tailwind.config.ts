@@ -16,6 +16,7 @@ export default {
       fontFamily: {
         sans: ["Manrope", "sans-serif"],
         serif: ["Fraunces", "serif"],
+        montserrat: ["Montserrat", "sans-serif"],
       },
       colors: {
         border: "hsl(var(--border))",
@@ -50,6 +51,17 @@ export default {
         card: {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
+        },
+        lentl: {
+          navy: "#1C355E",
+          "navy-dark": "#152742",
+          green: "#1F4D2B",
+          "green-dark": "#173B20",
+          lime: "#7FBF3F",
+          gold: "#C89B3C",
+          bg: "#F4F7F5",
+          charcoal: "#1F2937",
+          "card-bg": "#EEF2F8",
         },
         sidebar: {
           DEFAULT: "hsl(var(--sidebar-background))",

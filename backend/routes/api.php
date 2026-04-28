@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\Admin\RoleController as AdminRoleController;
 use App\Http\Controllers\Api\Admin\SiteSettingController;
 use App\Http\Controllers\Api\Admin\TestimonialController;
 use App\Http\Controllers\Api\Admin\UserController as AdminUserController;
+use App\Http\Controllers\Api\LentlInquiryController;
 use App\Http\Controllers\Api\ContactInquiryController;
 use App\Http\Controllers\Api\SiteContentController;
 use App\Http\Controllers\Api\SiteSearchController;
@@ -18,6 +19,7 @@ use Illuminate\Support\Facades\Route;
 Route::get('/site-content', SiteContentController::class);
 Route::get('/site-search', SiteSearchController::class);
 Route::post('/inquiries', [ContactInquiryController::class, 'store']);
+Route::post('/lentl-inquiries', [LentlInquiryController::class, 'store']);
 
 // Admin auth (public)
 Route::prefix('admin')->group(function (): void {

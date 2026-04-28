@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Menu, PhoneCall, Sparkles, Wheat, X, LayoutDashboard } from "lucide-react";
+import { ArrowLeft, Menu, PhoneCall, Sparkles, Wheat, X, LayoutDashboard } from "lucide-react";
 import ThemeToggle from "@/components/ThemeToggle";
 import { useLanguage } from "@/hooks/useLanguage";
 import { useAuth } from "@/contexts/AuthContext";
@@ -127,6 +127,14 @@ const Navbar = () => {
               <Sparkles size={16} className="text-accent" />
               {copy.nav.quote}
             </a>
+            <Link
+                to="/"
+                className="hidden items-center gap-1.5 rounded-full border border-border/70 bg-background/80 px-3 py-2 text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors lg:inline-flex"
+                title="LeNTL Group"
+              >
+                <ArrowLeft size={12} className="text-primary" />
+                LeNTL Group
+              </Link>
             {isAuthenticated && (
               <Link
                 to="/admin"

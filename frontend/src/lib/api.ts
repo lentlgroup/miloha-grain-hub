@@ -47,3 +47,20 @@ export const submitInquiry = (payload: InquiryPayload) =>
     method: "POST",
     body: JSON.stringify(payload),
   });
+
+// ── LeNTL Group contact form ──────────────────────────────────────────────────
+
+export type LentlInquiryPayload = {
+  name: string;
+  phone: string;
+  email?: string;
+  company?: string;
+  interest_area: "pure-grains" | "logistics" | "agro-solutions" | "partnership" | "general-inquiry";
+  message: string;
+};
+
+export const submitLentlInquiry = (payload: LentlInquiryPayload) =>
+  readJson<{ message: string; id: number }>("/lentl-inquiries", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
