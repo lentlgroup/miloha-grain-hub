@@ -15,6 +15,7 @@ import {
   Wheat,
   ChevronRight,
   Bell,
+  BarChart3,
 } from "lucide-react";
 import {
   Sidebar,
@@ -91,6 +92,12 @@ const navContent = [
     url: "/admin/content",
     icon: FileText,
     permission: "manage-content",
+  },
+  {
+    title: "Analytics",
+    url: "/admin/analytics",
+    icon: BarChart3,
+    permission: "manage-inquiries",
   },
 ];
 

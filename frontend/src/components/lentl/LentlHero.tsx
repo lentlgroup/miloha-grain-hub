@@ -1,15 +1,74 @@
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, ChevronDown, Building2, Globe, TrendingUp } from "lucide-react";
 import { Link } from "react-router-dom";
 
-const metrics = [
-  { value: "3", label: "Business Divisions", icon: Building2 },
-  { value: "TZ", label: "Based in Tanzania", icon: Globe },
-  { value: "1+", label: "Years Growing", icon: TrendingUp },
+type Metric = { value: string; numericValue: number; suffix: string; label: string; icon: React.ElementType };
+
+const metrics: Metric[] = [
+  { value: "3",  numericValue: 3,  suffix: "",  label: "Business Divisions", icon: Building2 },
+  { value: "TZ", numericValue: 0,  suffix: "",  label: "Based in Tanzania",  icon: Globe },
+  { value: "1+", numericValue: 1,  suffix: "+", label: "Years Growing",      icon: TrendingUp },
 ];
 
 const divisions = ["Pure Grains", "Logistics", "Agro Solutions"];
 
+/** Counts from 0 to `target` over `duration` ms, returns the current display value. */
+function useCounter(target: number, duration = 800, start = false): number {
+  const [count, setCount] = useState(0);
+  const rafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (!start || target === 0) return;
+    const startTime = performance.now();
+
+    const tick = (now: number) => {
+      const elapsed = now - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+      // ease-out
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setCount(Math.round(eased * target));
+      if (progress < 1) {
+        rafRef.current = requestAnimationFrame(tick);
+      }
+    };
+
+    rafRef.current = requestAnimationFrame(tick);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [target, duration, start]);
+
+  return count;
+}
+
+const MetricItem = ({ metric, animate }: { metric: Metric; animate: boolean }) => {
+  const counted = useCounter(metric.numericValue, 900, animate);
+  const display = metric.numericValue === 0 ? metric.value : `${counted}${metric.suffix}`;
+
+  return (
+    <div className="px-4 first:pl-0">
+      <metric.icon size={16} className="mb-2 text-lentl-lime" />
+      <div className="font-montserrat text-2xl font-black text-white animate-count-up">
+        {display}
+      </div>
+      <div className="mt-1 text-xs font-medium leading-snug text-white/50">{metric.label}</div>
+    </div>
+  );
+};
+
 export const LentlHero = () => {
+  const metricsRef = useRef<HTMLDivElement>(null);
+  const [metricsVisible, setMetricsVisible] = useState(false);
+
+  useEffect(() => {
+    const el = metricsRef.current;
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { if (entry.isIntersecting) { setMetricsVisible(true); observer.disconnect(); } },
+      { threshold: 0.5 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+
   return (
     <section id="home" className="relative flex min-h-screen items-center overflow-hidden bg-lentl-navy">
       {/* Geometric grid pattern */}
@@ -22,9 +81,11 @@ export const LentlHero = () => {
         }}
       />
 
-      {/* Radial green accent */}
-      <div className="absolute right-0 top-0 h-[60%] w-[45%] rounded-bl-full bg-lentl-green/20 blur-3xl" />
-      <div className="absolute bottom-0 left-0 h-[40%] w-[35%] rounded-tr-full bg-lentl-lime/10 blur-3xl" />
+      {/* Radial green accent blobs */}
+      <div className="absolute right-0 top-0 h-[60%] w-[45%] rounded-bl-full bg-lentl-green/20 blur-3xl pointer-events-none" />
+      <div className="absolute bottom-0 left-0 h-[40%] w-[35%] rounded-tr-full bg-lentl-lime/10 blur-3xl pointer-events-none" />
+      {/* Extra accent for depth */}
+      <div className="absolute left-1/2 top-1/3 h-[30%] w-[20%] -translate-x-1/2 rounded-full bg-lentl-gold/5 blur-3xl pointer-events-none" />
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 py-32 sm:px-6 lg:px-8">
         <div className="grid items-center gap-14 lg:grid-cols-2">
@@ -68,33 +129,32 @@ export const LentlHero = () => {
             <div className="mt-10 flex flex-col gap-4 sm:flex-row">
               <a
                 href="#divisions"
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-7 py-4 font-montserrat text-base font-bold text-lentl-navy shadow-xl transition-transform hover:-translate-y-0.5"
+                className="inline-flex items-center justify-center gap-2 rounded-full bg-white px-7 py-4 font-montserrat text-base font-bold text-lentl-navy shadow-xl transition-all duration-200 hover:-translate-y-1 hover:shadow-2xl"
               >
                 Explore Our Businesses <ArrowRight size={18} />
               </a>
               <a
                 href="#contact"
-                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/30 px-7 py-4 font-montserrat text-base font-semibold text-white transition-colors hover:bg-white/10"
+                className="inline-flex items-center justify-center gap-2 rounded-full border border-white/30 px-7 py-4 font-montserrat text-base font-semibold text-white transition-all duration-200 hover:bg-white/10 hover:border-white/50"
               >
                 Contact Us
               </a>
             </div>
 
             {/* Metrics row */}
-            <div className="mt-14 grid grid-cols-3 divide-x divide-white/15">
+            <div
+              ref={metricsRef}
+              className="mt-14 grid grid-cols-3 divide-x divide-white/15"
+            >
               {metrics.map((m) => (
-                <div key={m.label} className="px-4 first:pl-0">
-                  <m.icon size={16} className="mb-2 text-lentl-lime" />
-                  <div className="font-montserrat text-2xl font-black text-white">{m.value}</div>
-                  <div className="mt-1 text-xs font-medium leading-snug text-white/50">{m.label}</div>
-                </div>
+                <MetricItem key={m.label} metric={m} animate={metricsVisible} />
               ))}
             </div>
           </div>
 
           {/* ── Right: corporate structure card ── */}
           <div className="hidden lg:block">
-            <div className="rounded-3xl border border-white/15 bg-white/8 p-8 backdrop-blur-sm">
+            <div className="rounded-3xl border border-white/15 bg-white/[0.08] p-8 backdrop-blur-sm shadow-2xl">
               <p className="mb-5 font-montserrat text-[11px] font-semibold uppercase tracking-[0.22em] text-white/50">
                 Corporate Structure
               </p>
@@ -131,7 +191,7 @@ export const LentlHero = () => {
                 {divisions.map((div) => (
                   <div
                     key={div}
-                    className="rounded-xl border border-white/15 bg-white/8 px-2 py-3 text-center"
+                    className="rounded-xl border border-white/15 bg-white/[0.08] px-2 py-3 text-center transition-colors hover:bg-white/[0.14]"
                   >
                     <span className="font-montserrat text-xs font-semibold leading-snug text-white/80">
                       {div}
@@ -153,7 +213,7 @@ export const LentlHero = () => {
               {/* MILOHA link */}
               <Link
                 to="/miloha"
-                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-white/10 px-4 py-3 font-montserrat text-sm font-semibold text-white transition-colors hover:bg-white/15"
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-white/10 px-4 py-3 font-montserrat text-sm font-semibold text-white transition-all hover:bg-white/20 hover:-translate-y-0.5"
               >
                 Visit MILOHA Pure Grains <ArrowRight size={14} />
               </Link>

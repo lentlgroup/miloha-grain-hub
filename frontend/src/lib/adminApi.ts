@@ -197,6 +197,15 @@ export const fetchInquiries = (params?: { status?: string; search?: string }) =>
   return get<ApiList<Inquiry>>(`/inquiries${query}`);
 };
 
+export const fetchAllInquiries = () =>
+  get<ApiList<Inquiry>>("/inquiries");
+
+export const bulkUpdateInquiries = (ids: number[], status: Inquiry["status"]) =>
+  post<{ message: string }>("/inquiries/bulk-update", { ids, status });
+
+export const bulkDeleteInquiries = (ids: number[]) =>
+  post<{ message: string }>("/inquiries/bulk-delete", { ids });
+
 export const fetchInquiry = (id: number) =>
   get<ApiItem<Inquiry>>(`/inquiries/${id}`);
 

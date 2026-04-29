@@ -2,13 +2,12 @@ import { useState } from "react";
 import {
   MessageSquare, Search, Filter, Eye, CheckCircle2, Clock, AlertCircle,
   Phone, Mail, MapPin, Package, User, X, ChevronDown, Send, Trash2,
-  RefreshCw,
+  RefreshCw, Download, CheckSquare, Square, MinusSquare,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -21,6 +20,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import {
   fetchInquiries, fetchInquiryStats, updateInquiry, deleteInquiry,
+  bulkUpdateInquiries, bulkDeleteInquiries,
   type Inquiry,
 } from "@/lib/adminApi";
 
@@ -53,6 +53,38 @@ const statusMeta: Record<InquiryStatus, { label: string; icon: React.ElementType
   },
 };
 
+/** Convert array of Inquiry objects to CSV and trigger download */
+function exportToCsv(inquiries: Inquiry[]) {
+  const headers = ["ID", "Name", "Email", "Phone", "Product", "Packaging", "Quantity", "Location", "Buyer Type", "Status", "Message", "Follow-up Note", "Created At"];
+  const rows = inquiries.map((inq) => [
+    inq.id,
+    inq.name,
+    inq.email,
+    inq.phone,
+    inq.product,
+    inq.packaging,
+    inq.quantity ?? "",
+    inq.location,
+    inq.buyer_type,
+    inq.status,
+    (inq.message ?? "").replace(/"/g, '""'),
+    (inq.follow_up_note ?? "").replace(/"/g, '""'),
+    new Date(inq.created_at).toISOString(),
+  ]);
+
+  const csv = [headers, ...rows]
+    .map((row) => row.map((cell) => `"${cell}"`).join(","))
+    .join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `inquiries-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 const ManageInquiries = () => {
   const { hasPermission } = useAuth();
   const { toast } = useToast();
@@ -64,6 +96,10 @@ const ManageInquiries = () => {
   const [selected, setSelected] = useState<Inquiry | null>(null);
   const [followUpText, setFollowUpText] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<Inquiry | null>(null);
+
+  // Bulk selection state
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   const { data, isLoading, refetch } = useQuery({
     queryKey: ["admin", "inquiries", statusFilter, search],
@@ -104,7 +140,51 @@ const ManageInquiries = () => {
     onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
   });
 
+  const bulkUpdateMut = useMutation({
+    mutationFn: ({ ids, status }: { ids: number[]; status: InquiryStatus }) =>
+      bulkUpdateInquiries(ids, status),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "inquiries"] });
+      qc.invalidateQueries({ queryKey: ["admin", "inquiry-stats"] });
+      setSelectedIds(new Set());
+      toast({ title: "Updated", description: `${selectedIds.size} inquiries updated.` });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
+  const bulkDeleteMut = useMutation({
+    mutationFn: (ids: number[]) => bulkDeleteInquiries(ids),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["admin", "inquiries"] });
+      qc.invalidateQueries({ queryKey: ["admin", "inquiry-stats"] });
+      setSelectedIds(new Set());
+      setBulkDeleteOpen(false);
+      toast({ title: "Deleted", description: "Selected inquiries deleted." });
+    },
+    onError: (e: Error) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+  });
+
   const inquiries = data?.data ?? [];
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === inquiries.length && inquiries.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(inquiries.map((i) => i.id)));
+    }
+  };
+
+  const toggleSelect = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allSelected = inquiries.length > 0 && selectedIds.size === inquiries.length;
+  const someSelected = selectedIds.size > 0 && !allSelected;
 
   const openDetail = (inq: Inquiry) => {
     setSelected(inq);
@@ -129,9 +209,20 @@ const ManageInquiries = () => {
           <h1 className="text-2xl font-bold text-foreground">Inquiries</h1>
           <p className="text-sm text-muted-foreground mt-1">Manage customer contact requests and quote follow-ups</p>
         </div>
-        <Button variant="ghost" size="sm" className="gap-1.5 self-start" onClick={() => refetch()}>
-          <RefreshCw size={14} /> Refresh
-        </Button>
+        <div className="flex items-center gap-2 self-start">
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => exportToCsv(inquiries)}
+            disabled={inquiries.length === 0}
+          >
+            <Download size={13} /> Export CSV
+          </Button>
+          <Button variant="ghost" size="sm" className="gap-1.5" onClick={() => refetch()}>
+            <RefreshCw size={14} /> Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Status summary cards */}
@@ -192,6 +283,50 @@ const ManageInquiries = () => {
         </DropdownMenu>
       </div>
 
+      {/* Bulk action bar */}
+      {canEdit && selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 rounded-xl border border-primary/20 bg-primary/5 px-4 py-3">
+          <span className="text-sm font-medium text-foreground">
+            {selectedIds.size} selected
+          </span>
+          <Separator orientation="vertical" className="h-4" />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                Mark as… <ChevronDown size={12} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              {(["new", "in-progress", "resolved", "archived"] as InquiryStatus[]).map((s) => (
+                <DropdownMenuItem
+                  key={s}
+                  onClick={() => bulkUpdateMut.mutate({ ids: Array.from(selectedIds), status: s })}
+                  disabled={bulkUpdateMut.isPending}
+                >
+                  {statusMeta[s].label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button
+            variant="outline"
+            size="sm"
+            className="gap-1.5 text-xs text-destructive border-destructive/30 hover:bg-destructive/10"
+            onClick={() => setBulkDeleteOpen(true)}
+          >
+            <Trash2 size={12} /> Delete selected
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto text-xs"
+            onClick={() => setSelectedIds(new Set())}
+          >
+            Clear
+          </Button>
+        </div>
+      )}
+
       {/* Inquiry list */}
       {isLoading ? (
         <div className="space-y-3">
@@ -220,11 +355,50 @@ const ManageInquiries = () => {
         </div>
       ) : (
         <div className="space-y-3">
+          {/* Select-all row header */}
+          {canEdit && (
+            <div className="flex items-center gap-3 px-1">
+              <button
+                onClick={toggleSelectAll}
+                className="flex items-center gap-2 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {allSelected ? (
+                  <CheckSquare size={15} className="text-primary" />
+                ) : someSelected ? (
+                  <MinusSquare size={15} className="text-primary" />
+                ) : (
+                  <Square size={15} />
+                )}
+                {allSelected ? "Deselect all" : "Select all"}
+              </button>
+              <span className="text-xs text-muted-foreground">{inquiries.length} inquiries</span>
+            </div>
+          )}
+
           {inquiries.map((inq) => {
             const meta = statusMeta[inq.status];
+            const isChecked = selectedIds.has(inq.id);
             return (
-              <Card key={inq.id} className="surface-panel border-border/60 hover:border-primary/20 transition-all">
-                <CardContent className="flex items-start gap-4 p-4">
+              <Card
+                key={inq.id}
+                className={cn(
+                  "surface-panel border-border/60 hover:border-primary/20 transition-all",
+                  isChecked && "border-primary/30 bg-primary/[0.03]",
+                )}
+              >
+                <CardContent className="flex items-start gap-3 p-4">
+                  {canEdit && (
+                    <button
+                      className="mt-1 shrink-0 text-muted-foreground hover:text-primary transition-colors"
+                      onClick={() => toggleSelect(inq.id)}
+                    >
+                      {isChecked ? (
+                        <CheckSquare size={16} className="text-primary" />
+                      ) : (
+                        <Square size={16} />
+                      )}
+                    </button>
+                  )}
                   <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-muted/60", meta.color)}>
                     <meta.icon size={18} />
                   </div>
@@ -428,8 +602,31 @@ const ManageInquiries = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk delete confirmation */}
+      <AlertDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete {selectedIds.size} Inquiries?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete {selectedIds.size} selected inquiries. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => bulkDeleteMut.mutate(Array.from(selectedIds))}
+              disabled={bulkDeleteMut.isPending}
+            >
+              {bulkDeleteMut.isPending ? "Deleting…" : `Delete ${selectedIds.size} inquiries`}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
 
 export default ManageInquiries;
+

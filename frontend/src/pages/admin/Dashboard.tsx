@@ -13,11 +13,23 @@ import {
   FileText,
   Activity,
   RefreshCw,
+  BarChart3,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
+import {
+  AreaChart,
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+} from "recharts";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -37,6 +49,7 @@ const quickActions = [
   { label: "Edit Testimonials", href: "/admin/testimonials", icon: Star,          permission: "manage-testimonials" },
   { label: "Manage FAQs",       href: "/admin/faqs",         icon: HelpCircle,    permission: "manage-faqs" },
   { label: "Site Content",      href: "/admin/content",      icon: FileText,      permission: "manage-content" },
+  { label: "Analytics",         href: "/admin/analytics",    icon: BarChart3,     permission: "manage-inquiries" },
 ];
 
 const statusColors: Record<string, string> = {
@@ -46,12 +59,36 @@ const statusColors: Record<string, string> = {
   archived: "bg-muted text-muted-foreground",
 };
 
+const PIE_COLORS = ["#F59E0B", "#3B82F6", "#10B981", "#94A3B8"];
+
 const greeting = () => {
   const h = new Date().getHours();
   if (h < 12) return "Good morning";
   if (h < 17) return "Good afternoon";
   return "Good evening";
 };
+
+/** Build a 7-day trend from raw inquiries, keyed by date string */
+function buildTrend(inquiries: { created_at: string }[]) {
+  const days: { date: string; count: number }[] = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+    days.push({ date: key, count: 0 });
+  }
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - 7);
+  inquiries.forEach((inq) => {
+    const d = new Date(inq.created_at);
+    if (d >= cutoff) {
+      const key = d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+      const found = days.find((day) => day.date === key);
+      if (found) found.count += 1;
+    }
+  });
+  return days;
+}
 
 const StatSkeleton = () => (
   <Card className="surface-panel border-border/60">
@@ -107,6 +144,7 @@ const Dashboard = () => {
   });
 
   const recentInquiries = (recentInquiriesData?.data ?? []).slice(0, 5);
+  const trendData = buildTrend(recentInquiriesData?.data ?? []);
 
   const stats = [
     {
@@ -187,6 +225,14 @@ const Dashboard = () => {
   const visibleActions = quickActions.filter((a) => hasPermission(a.permission));
 
   const total = inquiryStats?.total ?? 0;
+  const pieData = inquiryStats
+    ? [
+        { name: "New",         value: inquiryStats.new         },
+        { name: "In Progress", value: inquiryStats.in_progress },
+        { name: "Resolved",    value: inquiryStats.resolved    },
+        { name: "Archived",    value: inquiryStats.archived    },
+      ].filter((d) => d.value > 0)
+    : [];
 
   return (
     <div className="space-y-6">
@@ -242,6 +288,119 @@ const Dashboard = () => {
         )}
       </div>
 
+      {/* Charts row */}
+      {hasPermission("manage-inquiries") && (
+        <div className="grid gap-6 lg:grid-cols-[1fr_280px]">
+          {/* 7-day inquiry trend */}
+          <Card className="surface-panel border-border/60">
+            <CardHeader className="pb-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-base font-semibold">Inquiry Trend</CardTitle>
+                <Link to="/admin/analytics">
+                  <Button variant="ghost" size="sm" className="h-7 text-xs text-muted-foreground">
+                    Full analytics <ArrowRight size={12} className="ml-1" />
+                  </Button>
+                </Link>
+              </div>
+              <CardDescription>New inquiries over the last 7 days</CardDescription>
+            </CardHeader>
+            <CardContent className="pr-4">
+              <ResponsiveContainer width="100%" height={180}>
+                <AreaChart data={trendData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
+                  <defs>
+                    <linearGradient id="inquiryGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%"  stopColor="hsl(154 55% 27%)" stopOpacity={0.25} />
+                      <stop offset="95%" stopColor="hsl(154 55% 27%)" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <YAxis
+                    allowDecimals={false}
+                    tick={{ fontSize: 11, fill: "hsl(var(--muted-foreground))" }}
+                    axisLine={false}
+                    tickLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      background: "hsl(var(--card))",
+                      border: "1px solid hsl(var(--border))",
+                      borderRadius: 8,
+                      fontSize: 12,
+                    }}
+                    labelStyle={{ fontWeight: 600, color: "hsl(var(--foreground))" }}
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="count"
+                    name="Inquiries"
+                    stroke="hsl(154 55% 27%)"
+                    strokeWidth={2}
+                    fill="url(#inquiryGradient)"
+                    dot={{ r: 4, fill: "hsl(154 55% 27%)", strokeWidth: 0 }}
+                    activeDot={{ r: 6, strokeWidth: 0 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Status breakdown donut */}
+          <Card className="surface-panel border-border/60">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">Status Breakdown</CardTitle>
+              <CardDescription>{total} total requests</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col items-center gap-4">
+              {statsLoading ? (
+                <Skeleton className="h-36 w-36 rounded-full" />
+              ) : pieData.length > 0 ? (
+                <>
+                  <PieChart width={140} height={140}>
+                    <Pie
+                      data={pieData}
+                      cx={65}
+                      cy={65}
+                      innerRadius={44}
+                      outerRadius={65}
+                      paddingAngle={3}
+                      dataKey="value"
+                    >
+                      {pieData.map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                  <div className="w-full space-y-2">
+                    {[
+                      { name: "New",         value: inquiryStats!.new,         color: PIE_COLORS[0] },
+                      { name: "In Progress", value: inquiryStats!.in_progress, color: PIE_COLORS[1] },
+                      { name: "Resolved",    value: inquiryStats!.resolved,    color: PIE_COLORS[2] },
+                      { name: "Archived",    value: inquiryStats!.archived,    color: PIE_COLORS[3] },
+                    ].map((s) => (
+                      <div key={s.name} className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5">
+                          <span className="h-2 w-2 rounded-full flex-shrink-0" style={{ background: s.color }} />
+                          <span className="text-muted-foreground">{s.name}</span>
+                        </div>
+                        <span className="font-semibold text-foreground tabular-nums">{s.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground py-8">No data yet</p>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
         {/* Recent Inquiries */}
         {hasPermission("manage-inquiries") && (
@@ -294,37 +453,6 @@ const Dashboard = () => {
         )}
 
         <div className="space-y-6">
-          {/* Inquiry breakdown */}
-          {hasPermission("manage-inquiries") && inquiryStats && (
-            <Card className="surface-panel border-border/60">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold">Inquiry Status</CardTitle>
-                <CardDescription>{total} total requests received</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {[
-                  { label: "New",         value: inquiryStats.new,         color: "bg-amber-500" },
-                  { label: "In Progress", value: inquiryStats.in_progress, color: "bg-blue-500" },
-                  { label: "Resolved",    value: inquiryStats.resolved,    color: "bg-emerald-500" },
-                  { label: "Archived",    value: inquiryStats.archived,    color: "bg-muted-foreground/40" },
-                ].map((s) => (
-                  <div key={s.label} className="space-y-1.5">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="font-medium text-foreground">{s.label}</span>
-                      <span className="text-muted-foreground">{s.value} / {total}</span>
-                    </div>
-                    <Progress value={total > 0 ? (s.value / total) * 100 : 0} className="h-2" />
-                  </div>
-                ))}
-                <Link to="/admin/inquiries">
-                  <Button variant="outline" size="sm" className="w-full mt-2 text-xs">
-                    Manage Inquiries <ArrowRight size={12} className="ml-1" />
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          )}
-
           {/* Quick actions */}
           <Card className="surface-panel border-border/60">
             <CardHeader className="pb-3">
@@ -353,10 +481,10 @@ const Dashboard = () => {
             </CardHeader>
             <CardContent className="space-y-3">
               {[
-                { label: "Landing Page",   status: "Live",   ok: true },
-                { label: "Contact Form",   status: "Active", ok: true },
-                { label: "Site Search",    status: "Active", ok: true },
-                { label: "WhatsApp Widget",status: "Active", ok: true },
+                { label: "Landing Page",    status: "Live",   ok: true },
+                { label: "Contact Form",    status: "Active", ok: true },
+                { label: "Site Search",     status: "Active", ok: true },
+                { label: "WhatsApp Widget", status: "Active", ok: true },
               ].map((item) => (
                 <div key={item.label} className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">{item.label}</span>

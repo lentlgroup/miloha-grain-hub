@@ -21,6 +21,7 @@ import ManageContent from "./pages/admin/ManageContent.tsx";
 import ManageUsers from "./pages/admin/ManageUsers.tsx";
 import ManageRoles from "./pages/admin/ManageRoles.tsx";
 import ManagePermissions from "./pages/admin/ManagePermissions.tsx";
+import ManageAnalytics from "./pages/admin/ManageAnalytics.tsx";
 
 const queryClient = new QueryClient();
 
@@ -55,6 +56,7 @@ const App = () => (
                   <Route path="users" element={<ManageUsers />} />
                   <Route path="roles" element={<ManageRoles />} />
                   <Route path="permissions" element={<ManagePermissions />} />
+                  <Route path="analytics" element={<ManageAnalytics />} />
                 </Route>
 
                 {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}

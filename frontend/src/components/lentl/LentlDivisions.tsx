@@ -1,11 +1,14 @@
 import { ArrowRight, Wheat, Truck, Leaf } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
+import { cn } from "@/lib/utils";
 
 type Division = {
   icon: React.ElementType;
-  color: string;
+  accentColor: string;
   borderColor: string;
   bgColor: string;
+  topAccent: string;
   badge: string;
   title: string;
   sub: string;
@@ -18,9 +21,10 @@ type Division = {
 const divisionsList: Division[] = [
   {
     icon: Wheat,
-    color: "text-lentl-gold",
+    accentColor: "text-lentl-gold",
     borderColor: "border-lentl-gold/30",
-    bgColor: "bg-lentl-gold/8",
+    bgColor: "bg-lentl-gold/[0.06]",
+    topAccent: "from-lentl-gold/40 to-transparent",
     badge: "Food & Trade",
     title: "MILOHA Pure Grains",
     sub: "Quality Grains. Reliable Supply.",
@@ -31,9 +35,10 @@ const divisionsList: Division[] = [
   },
   {
     icon: Truck,
-    color: "text-lentl-lime",
+    accentColor: "text-lentl-lime",
     borderColor: "border-lentl-lime/30",
-    bgColor: "bg-lentl-lime/8",
+    bgColor: "bg-lentl-lime/[0.06]",
+    topAccent: "from-lentl-lime/40 to-transparent",
     badge: "Movement & Storage",
     title: "MILOHA Logistics",
     sub: "Reliable Movement. On Time.",
@@ -43,9 +48,10 @@ const divisionsList: Division[] = [
   },
   {
     icon: Leaf,
-    color: "text-lentl-green",
+    accentColor: "text-lentl-green",
     borderColor: "border-lentl-green/30",
-    bgColor: "bg-lentl-green/8",
+    bgColor: "bg-lentl-green/[0.06]",
+    topAccent: "from-lentl-green/40 to-transparent",
     badge: "Agriculture",
     title: "MILOHA Agro Solutions",
     sub: "Supporting Farmers. Building Systems.",
@@ -56,11 +62,16 @@ const divisionsList: Division[] = [
 ];
 
 export const LentlDivisions = () => {
+  const { ref, inView } = useScrollReveal<HTMLDivElement>(0.1);
+
   return (
     <section id="divisions" className="bg-lentl-bg py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="mb-14 text-center">
+        <div
+          ref={ref}
+          className={cn("mb-14 text-center reveal", inView && "in-view")}
+        >
           <div className="inline-flex items-center gap-2 rounded-full border border-lentl-navy/15 bg-white px-4 py-2">
             <span className="h-1.5 w-1.5 rounded-full bg-lentl-lime" />
             <span className="font-montserrat text-[11px] font-semibold uppercase tracking-[0.24em] text-lentl-navy">
@@ -78,52 +89,74 @@ export const LentlDivisions = () => {
 
         {/* Cards */}
         <div className="grid gap-6 md:grid-cols-3">
-          {divisionsList.map((div) => (
-            <div
-              key={div.title}
-              className="group flex flex-col rounded-3xl border border-lentl-navy/10 bg-white p-8 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_60px_-20px_rgba(28,53,94,0.15)]"
-            >
-              {/* Icon */}
+          {divisionsList.map((div, i) => {
+            const card = (
               <div
-                className={`flex h-14 w-14 items-center justify-center rounded-2xl ${div.bgColor} ${div.borderColor} border`}
+                className={cn(
+                  "group relative flex flex-col overflow-hidden rounded-3xl border border-lentl-navy/10 bg-white p-8 shadow-sm transition-all duration-300 hover:-translate-y-2 hover:shadow-[0_28px_64px_-20px_rgba(28,53,94,0.18)] reveal",
+                  i === 0 && "reveal-delay-1",
+                  i === 1 && "reveal-delay-2",
+                  i === 2 && "reveal-delay-3",
+                  inView && "in-view",
+                )}
               >
-                <div.icon size={24} className={div.color} />
+                {/* Top accent gradient bar */}
+                <div
+                  className={cn(
+                    "absolute inset-x-0 top-0 h-1 bg-gradient-to-r",
+                    div.topAccent,
+                  )}
+                />
+
+                {/* Icon */}
+                <div
+                  className={cn(
+                    "flex h-14 w-14 items-center justify-center rounded-2xl border",
+                    div.bgColor,
+                    div.borderColor,
+                  )}
+                >
+                  <div.icon size={24} className={div.accentColor} />
+                </div>
+
+                {/* Badge */}
+                <span
+                  className={cn(
+                    "mt-5 inline-flex w-fit items-center rounded-full px-3 py-1 font-montserrat text-[10px] font-bold uppercase tracking-[0.2em]",
+                    div.bgColor,
+                    div.accentColor,
+                  )}
+                >
+                  {div.badge}
+                </span>
+
+                {/* Title */}
+                <h3 className="mt-3 font-montserrat text-xl font-bold text-lentl-navy">
+                  {div.title}
+                </h3>
+                <p className="mt-1 text-sm font-semibold text-lentl-charcoal/50">{div.sub}</p>
+
+                {/* Copy */}
+                <p className="mt-4 flex-1 text-base leading-7 text-lentl-charcoal/70">{div.copy}</p>
+
+                {/* CTA */}
+                <div
+                  className={cn(
+                    "mt-8 inline-flex items-center gap-2 font-montserrat text-sm font-bold transition-all duration-200 group-hover:gap-3",
+                    div.accentColor,
+                  )}
+                >
+                  {div.cta} <ArrowRight size={15} className="transition-transform duration-200 group-hover:translate-x-1" />
+                </div>
               </div>
+            );
 
-              {/* Badge */}
-              <span
-                className={`mt-5 inline-flex w-fit items-center rounded-full px-3 py-1 font-montserrat text-[10px] font-bold uppercase tracking-[0.2em] ${div.bgColor} ${div.color}`}
-              >
-                {div.badge}
-              </span>
-
-              {/* Title */}
-              <h3 className="mt-3 font-montserrat text-xl font-bold text-lentl-navy">
-                {div.title}
-              </h3>
-              <p className="mt-1 text-sm font-semibold text-lentl-charcoal/50">{div.sub}</p>
-
-              {/* Copy */}
-              <p className="mt-4 flex-1 text-base leading-7 text-lentl-charcoal/70">{div.copy}</p>
-
-              {/* CTA */}
-              {div.external ? (
-                <Link
-                  to={div.ctaHref}
-                  className={`mt-8 inline-flex items-center gap-2 font-montserrat text-sm font-bold transition-colors ${div.color} hover:opacity-80`}
-                >
-                  {div.cta} <ArrowRight size={15} />
-                </Link>
-              ) : (
-                <a
-                  href={div.ctaHref}
-                  className={`mt-8 inline-flex items-center gap-2 font-montserrat text-sm font-bold transition-colors ${div.color} hover:opacity-80`}
-                >
-                  {div.cta} <ArrowRight size={15} />
-                </a>
-              )}
-            </div>
-          ))}
+            return div.external ? (
+              <Link key={div.title} to={div.ctaHref}>{card}</Link>
+            ) : (
+              <a key={div.title} href={div.ctaHref}>{card}</a>
+            );
+          })}
         </div>
       </div>
     </section>

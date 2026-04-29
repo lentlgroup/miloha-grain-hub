@@ -1,4 +1,6 @@
 import { CheckCircle2 } from "lucide-react";
+import { useScrollReveal } from "@/hooks/useScrollReveal";
+import { cn } from "@/lib/utils";
 
 const pillars = [
   "Practical, scalable businesses built for long-term value",
@@ -8,12 +10,18 @@ const pillars = [
 ];
 
 export const LentlAbout = () => {
+  const { ref: leftRef, inView: leftInView } = useScrollReveal<HTMLDivElement>(0.1);
+  const { ref: rightRef, inView: rightInView } = useScrollReveal<HTMLDivElement>(0.1);
+
   return (
     <section id="about" className="bg-lentl-bg py-24">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <div className="grid gap-14 lg:grid-cols-2 lg:items-center">
           {/* ── Left ── */}
-          <div>
+          <div
+            ref={leftRef}
+            className={cn("reveal-right", leftInView && "in-view")}
+          >
             {/* Kicker */}
             <div className="inline-flex items-center gap-2 rounded-full border border-lentl-navy/15 bg-lentl-card-bg px-4 py-2">
               <span className="h-1.5 w-1.5 rounded-full bg-lentl-lime" />
@@ -52,14 +60,27 @@ export const LentlAbout = () => {
           </div>
 
           {/* ── Right ── */}
-          <div className="rounded-3xl border border-lentl-navy/10 bg-white p-8 shadow-[0_20px_60px_-24px_rgba(28,53,94,0.14)]">
+          <div
+            ref={rightRef}
+            className={cn(
+              "rounded-3xl border border-lentl-navy/10 bg-white p-8 shadow-[0_20px_60px_-24px_rgba(28,53,94,0.14)] reveal-left",
+              rightInView && "in-view",
+            )}
+          >
             <p className="mb-5 font-montserrat text-[11px] font-semibold uppercase tracking-[0.22em] text-lentl-navy/50">
               Our Operating Principles
             </p>
 
             <ul className="space-y-4">
-              {pillars.map((point) => (
-                <li key={point} className="flex items-start gap-3">
+              {pillars.map((point, i) => (
+                <li
+                  key={point}
+                  className={cn(
+                    "flex items-start gap-3 reveal",
+                    `reveal-delay-${i + 1}`,
+                    rightInView && "in-view",
+                  )}
+                >
                   <CheckCircle2
                     size={18}
                     className="mt-0.5 shrink-0 text-lentl-lime"
