@@ -53,6 +53,10 @@ const statusMeta: Record<InquiryStatus, { label: string; icon: React.ElementType
   },
 };
 
+/** Escape a value for use in a CSV cell. */
+const escapeCsvField = (value: string | number | null | undefined): string =>
+  String(value ?? "").replace(/"/g, '""');
+
 /** Convert array of Inquiry objects to CSV and trigger download */
 function exportToCsv(inquiries: Inquiry[]) {
   const headers = ["ID", "Name", "Email", "Phone", "Product", "Packaging", "Quantity", "Location", "Buyer Type", "Status", "Message", "Follow-up Note", "Created At"];
@@ -67,8 +71,8 @@ function exportToCsv(inquiries: Inquiry[]) {
     inq.location,
     inq.buyer_type,
     inq.status,
-    (inq.message ?? "").replace(/"/g, '""'),
-    (inq.follow_up_note ?? "").replace(/"/g, '""'),
+    escapeCsvField(inq.message),
+    escapeCsvField(inq.follow_up_note),
     new Date(inq.created_at).toISOString(),
   ]);
 

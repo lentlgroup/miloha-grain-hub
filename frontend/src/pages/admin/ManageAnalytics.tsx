@@ -91,11 +91,23 @@ function buildLocationBreakdown(inquiries: Inquiry[]) {
     .slice(0, 8);
 }
 
+/** Escape a value for use in a CSV cell. */
+const escapeCsvField = (value: string | number | null | undefined): string =>
+  String(value ?? "").replace(/"/g, '""');
+
 function exportInquiriesCsv(inquiries: Inquiry[]) {
   const headers = ["ID", "Name", "Email", "Phone", "Product", "Packaging", "Quantity", "Location", "Buyer Type", "Status", "Created At"];
   const rows = inquiries.map((inq) => [
-    inq.id, inq.name, inq.email, inq.phone, inq.product, inq.packaging,
-    inq.quantity ?? "", inq.location, inq.buyer_type, inq.status,
+    inq.id,
+    escapeCsvField(inq.name),
+    escapeCsvField(inq.email),
+    escapeCsvField(inq.phone),
+    escapeCsvField(inq.product),
+    escapeCsvField(inq.packaging),
+    inq.quantity ?? "",
+    escapeCsvField(inq.location),
+    escapeCsvField(inq.buyer_type),
+    inq.status,
     new Date(inq.created_at).toISOString(),
   ]);
   const csv = [headers, ...rows].map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");

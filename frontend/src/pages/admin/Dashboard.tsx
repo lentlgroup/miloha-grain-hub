@@ -378,10 +378,10 @@ const Dashboard = () => {
                   </PieChart>
                   <div className="w-full space-y-2">
                     {[
-                      { name: "New",         value: inquiryStats!.new,         color: PIE_COLORS[0] },
-                      { name: "In Progress", value: inquiryStats!.in_progress, color: PIE_COLORS[1] },
-                      { name: "Resolved",    value: inquiryStats!.resolved,    color: PIE_COLORS[2] },
-                      { name: "Archived",    value: inquiryStats!.archived,    color: PIE_COLORS[3] },
+                      { name: "New",         value: inquiryStats?.new         ?? 0, color: PIE_COLORS[0] },
+                      { name: "In Progress", value: inquiryStats?.in_progress ?? 0, color: PIE_COLORS[1] },
+                      { name: "Resolved",    value: inquiryStats?.resolved    ?? 0, color: PIE_COLORS[2] },
+                      { name: "Archived",    value: inquiryStats?.archived    ?? 0, color: PIE_COLORS[3] },
                     ].map((s) => (
                       <div key={s.name} className="flex items-center justify-between text-xs">
                         <div className="flex items-center gap-1.5">

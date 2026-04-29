@@ -82,10 +82,10 @@ export const LentlHero = () => {
       />
 
       {/* Radial green accent blobs */}
-      <div className="absolute right-0 top-0 h-[60%] w-[45%] rounded-bl-full bg-lentl-green/20 blur-3xl pointer-events-none" />
-      <div className="absolute bottom-0 left-0 h-[40%] w-[35%] rounded-tr-full bg-lentl-lime/10 blur-3xl pointer-events-none" />
+      <div aria-hidden="true" className="absolute right-0 top-0 h-[60%] w-[45%] rounded-bl-full bg-lentl-green/20 blur-3xl pointer-events-none" />
+      <div aria-hidden="true" className="absolute bottom-0 left-0 h-[40%] w-[35%] rounded-tr-full bg-lentl-lime/10 blur-3xl pointer-events-none" />
       {/* Extra accent for depth */}
-      <div className="absolute left-1/2 top-1/3 h-[30%] w-[20%] -translate-x-1/2 rounded-full bg-lentl-gold/5 blur-3xl pointer-events-none" />
+      <div aria-hidden="true" className="absolute left-1/2 top-1/3 h-[30%] w-[20%] -translate-x-1/2 rounded-full bg-lentl-gold/5 blur-3xl pointer-events-none" />
 
       <div className="relative z-10 mx-auto max-w-7xl px-4 py-32 sm:px-6 lg:px-8">
         <div className="grid items-center gap-14 lg:grid-cols-2">
